@@ -13,21 +13,27 @@ pub enum MarkerType {
     Region,
 }
 
-/// Represents a labeled region in a Reaper WAV file
+/// Represents a labeled marker or region in a Reaper WAV file
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Marker {
     /// Unique identifier matching the cue point
     pub id: u32,
+    /// Name (from 'labl' chunk)
+    pub name: String,
     /// Type of marker (Marker or Region)
     pub marker_type: MarkerType,
-    /// Name of the region (from 'labl' chunk)
-    pub name: String,
     /// Start position in samples
     pub start_sample: u32,
-    /// End position in samples
+    /// End position in samples (None for simple markers)
     pub end_sample: Option<u32>,
     /// Sample rate of the audio file
     pub sample_rate: u32,
+    /// DERIVED: Start time in seconds
+    pub start_sec: f64,
+    /// DERIVED: End time in seconds (None for simple markers)
+    pub end_sec: Option<f64>,
+    /// DERIVED: Duration in seconds (None for simple markers)
+    pub duration_sec: Option<f64>,
 }
 
 impl Marker {
@@ -45,6 +51,17 @@ impl Marker {
             MarkerType::Marker
         };
 
+        // Calculate derived time values
+        let start_sec = start_sample as f64 / sample_rate as f64;
+        let (end_sec, duration_sec) = match end_sample {
+            Some(end) => {
+                let end_s = end as f64 / sample_rate as f64;
+                let dur_s = end_s - start_sec;
+                (Some(end_s), Some(dur_s))
+            }
+            None => (None, None),
+        };
+
         Marker {
             id,
             name,
@@ -52,24 +69,25 @@ impl Marker {
             start_sample,
             end_sample,
             sample_rate,
+            start_sec,
+            end_sec,
+            duration_sec,
         }
     }
 
     /// Get start time in seconds
     pub fn start_seconds(&self) -> f64 {
-        self.start_sample as f64 / self.sample_rate as f64
+        self.start_sec
     }
 
     /// Get end time in seconds
     pub fn end_seconds(&self) -> Option<f64> {
-        self.end_sample
-            .map(|end_sample| end_sample as f64 / self.sample_rate as f64)
+        self.end_sec
     }
 
     /// Get duration in seconds
     pub fn duration_seconds(&self) -> Option<f64> {
-        self.end_seconds()
-            .map(|end_seconds| end_seconds - self.start_seconds())
+        self.duration_sec
     }
 
     /// Get duration in samples
@@ -78,33 +96,26 @@ impl Marker {
             .map(|end_sample| end_sample - self.start_sample)
     }
 
-    /// Format region as a string
+    /// Format marker as a string
     pub fn format(&self) -> String {
         match self.marker_type {
             MarkerType::Region => {
                 let end = self.end_sample.unwrap();
-                let end_sec = end as f64 / self.sample_rate as f64;
-                let dur_sec = end_sec - self.start_seconds();
                 format!(
-                    "Region {} (ID: {}): '{}'\n  Start: {:.3}s ({} samples), End: {:.3}s ({} samples), Duration: {:.3}s",
-                    self.id,
+                    "Region (ID: {}): '{}'\n  Start: {:.3}s ({} samples), End: {:.3}s ({} samples), Duration: {:.3}s",
                     self.id,
                     self.name,
-                    self.start_seconds(),
+                    self.start_sec,
                     self.start_sample,
-                    end_sec,
+                    self.end_sec.unwrap(),
                     end,
-                    dur_sec
+                    self.duration_sec.unwrap()
                 )
             }
             MarkerType::Marker => {
                 format!(
-                    "Marker {} (ID: {}): '{}'\n  Position: {:.3}s ({} samples)",
-                    self.id,
-                    self.id,
-                    self.name,
-                    self.start_seconds(),
-                    self.start_sample
+                    "Marker (ID: {}): '{}'\n  Position: {:.3}s ({} samples)",
+                    self.id, self.name, self.start_sec, self.start_sample
                 )
             }
         }

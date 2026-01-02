@@ -123,17 +123,15 @@ fn output_delimited(markers: &[Marker], delimiter: char, include_header: bool) {
             marker.id.to_string(),
             marker.name.clone(),
             marker.start_sample.to_string(),
-            // Handle Option<u32> for end_sample
             marker.end_sample.map(|v| v.to_string()).unwrap_or_default(),
-            format!("{:.6}", marker.start_seconds()),
-            // Handle Option<f64> for end_seconds
+            // Use the pre-calculated fields. Format to 6 decimal places.
+            format!("{:.6}", marker.start_sec),
             marker
-                .end_seconds()
+                .end_sec
                 .map(|v| format!("{:.6}", v))
                 .unwrap_or_default(),
-            // Handle Option<f64> for duration_seconds
             marker
-                .duration_seconds()
+                .duration_sec
                 .map(|v| format!("{:.6}", v))
                 .unwrap_or_default(),
             marker.sample_rate.to_string(),

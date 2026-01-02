@@ -1,6 +1,7 @@
 use clap::{Parser, ValueEnum};
 use env_logger::Builder;
 use log::{error, warn};
+use reaper_region_reader::Marker;
 use reaper_region_reader::parse_regions_from_file;
 use serde_json;
 use std::io;
@@ -95,11 +96,7 @@ fn output_json(regions: &[reaper_region_reader::Marker], file_path: &str) {
 }
 
 /// Delimited output (CSV, TSV, PSV)
-fn output_delimited(
-    regions: &[reaper_region_reader::Marker],
-    delimiter: char,
-    include_header: bool,
-) {
+fn output_delimited(markers: &[Marker], delimiter: char, include_header: bool) {
     let mut wtr = csv::WriterBuilder::new()
         .delimiter(delimiter as u8)
         .from_writer(io::stdout());
@@ -107,6 +104,7 @@ fn output_delimited(
     // Header
     if include_header {
         let _ = wtr.write_record(&[
+            "type",
             "id",
             "name",
             "start_sample",
@@ -119,25 +117,26 @@ fn output_delimited(
     }
 
     // Data rows
-    for region in regions {
+    for marker in markers {
         let _ = wtr.write_record(&[
-            region.id.to_string(),
-            region.name.clone(),
-            region.start_sample.to_string(),
+            format!("{:?}", marker.marker_type).to_lowercase(),
+            marker.id.to_string(),
+            marker.name.clone(),
+            marker.start_sample.to_string(),
             // Handle Option<u32> for end_sample
-            region.end_sample.map(|v| v.to_string()).unwrap_or_default(),
-            format!("{:.6}", region.start_seconds()),
+            marker.end_sample.map(|v| v.to_string()).unwrap_or_default(),
+            format!("{:.6}", marker.start_seconds()),
             // Handle Option<f64> for end_seconds
-            region
+            marker
                 .end_seconds()
                 .map(|v| format!("{:.6}", v))
                 .unwrap_or_default(),
             // Handle Option<f64> for duration_seconds
-            region
+            marker
                 .duration_seconds()
                 .map(|v| format!("{:.6}", v))
                 .unwrap_or_default(),
-            region.sample_rate.to_string(),
+            marker.sample_rate.to_string(),
         ]);
     }
 
@@ -159,7 +158,7 @@ fn output_human(regions: &[reaper_region_reader::Marker], file_path: &str) {
         match marker.end_sample {
             Some(end_sample) => {
                 // This is a region
-                println!("Region {} (ID: {}): '{}'", i + 1, marker.id, marker.name);
+                println!("Region (ID: {}): '{}'", marker.id, marker.name);
                 println!(
                     "  Start: {:.3}s ({} samples)",
                     marker.start_seconds(),
@@ -178,7 +177,7 @@ fn output_human(regions: &[reaper_region_reader::Marker], file_path: &str) {
             }
             None => {
                 // This is a simple marker
-                println!("Marker {} (ID: {}): '{}'", i + 1, marker.id, marker.name);
+                println!("Marker (ID: {}): '{}'", marker.id, marker.name);
                 println!(
                     "  Position: {:.3}s ({} samples)",
                     marker.start_seconds(),

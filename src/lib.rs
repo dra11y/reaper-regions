@@ -4,11 +4,22 @@ use std::collections::HashMap;
 use std::error::Error;
 use wavtag::{ChunkType, RiffFile};
 
+/// Type of the marker
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MarkerType {
+    /// A simple marker (single point)
+    Marker,
+    /// A region with start and end
+    Region,
+}
+
 /// Represents a labeled region in a Reaper WAV file
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Marker {
     /// Unique identifier matching the cue point
     pub id: u32,
+    /// Type of marker (Marker or Region)
+    pub marker_type: MarkerType,
     /// Name of the region (from 'labl' chunk)
     pub name: String,
     /// Start position in samples
@@ -20,7 +31,7 @@ pub struct Marker {
 }
 
 impl Marker {
-    /// Create a new region
+    /// Create a new marker or region
     pub fn new(
         id: u32,
         name: String,
@@ -28,9 +39,16 @@ impl Marker {
         end_sample: Option<u32>,
         sample_rate: u32,
     ) -> Self {
+        let marker_type = if end_sample.is_some() {
+            MarkerType::Region
+        } else {
+            MarkerType::Marker
+        };
+
         Marker {
             id,
             name,
+            marker_type,
             start_sample,
             end_sample,
             sample_rate,
@@ -62,8 +80,9 @@ impl Marker {
 
     /// Format region as a string
     pub fn format(&self) -> String {
-        match self.end_sample {
-            Some(end) => {
+        match self.marker_type {
+            MarkerType::Region => {
+                let end = self.end_sample.unwrap();
                 let end_sec = end as f64 / self.sample_rate as f64;
                 let dur_sec = end_sec - self.start_seconds();
                 format!(
@@ -78,7 +97,7 @@ impl Marker {
                     dur_sec
                 )
             }
-            None => {
+            MarkerType::Marker => {
                 format!(
                     "Marker {} (ID: {}): '{}'\n  Position: {:.3}s ({} samples)",
                     self.id,

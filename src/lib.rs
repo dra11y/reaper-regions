@@ -6,7 +6,7 @@ use wavtag::{ChunkType, RiffFile};
 
 /// Represents a labeled region in a Reaper WAV file
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Region {
+pub struct Marker {
     /// Unique identifier matching the cue point
     pub id: u32,
     /// Name of the region (from 'labl' chunk)
@@ -14,21 +14,21 @@ pub struct Region {
     /// Start position in samples
     pub start_sample: u32,
     /// End position in samples
-    pub end_sample: u32,
+    pub end_sample: Option<u32>,
     /// Sample rate of the audio file
     pub sample_rate: u32,
 }
 
-impl Region {
+impl Marker {
     /// Create a new region
     pub fn new(
         id: u32,
         name: String,
         start_sample: u32,
-        end_sample: u32,
+        end_sample: Option<u32>,
         sample_rate: u32,
     ) -> Self {
-        Region {
+        Marker {
             id,
             name,
             start_sample,
@@ -43,38 +43,57 @@ impl Region {
     }
 
     /// Get end time in seconds
-    pub fn end_seconds(&self) -> f64 {
-        self.end_sample as f64 / self.sample_rate as f64
+    pub fn end_seconds(&self) -> Option<f64> {
+        self.end_sample
+            .map(|end_sample| end_sample as f64 / self.sample_rate as f64)
     }
 
     /// Get duration in seconds
-    pub fn duration_seconds(&self) -> f64 {
-        self.end_seconds() - self.start_seconds()
+    pub fn duration_seconds(&self) -> Option<f64> {
+        self.end_seconds()
+            .map(|end_seconds| end_seconds - self.start_seconds())
     }
 
     /// Get duration in samples
-    pub fn duration_samples(&self) -> u32 {
-        self.end_sample - self.start_sample
+    pub fn duration_samples(&self) -> Option<u32> {
+        self.end_sample
+            .map(|end_sample| end_sample - self.start_sample)
     }
 
     /// Format region as a string
     pub fn format(&self) -> String {
-        format!(
-            "Region {} (ID: {}): '{}'\n  Start: {:.3}s ({} samples), End: {:.3}s ({} samples), Duration: {:.3}s",
-            self.id,
-            self.id,
-            self.name,
-            self.start_seconds(),
-            self.start_sample,
-            self.end_seconds(),
-            self.end_sample,
-            self.duration_seconds()
-        )
+        match self.end_sample {
+            Some(end) => {
+                let end_sec = end as f64 / self.sample_rate as f64;
+                let dur_sec = end_sec - self.start_seconds();
+                format!(
+                    "Region {} (ID: {}): '{}'\n  Start: {:.3}s ({} samples), End: {:.3}s ({} samples), Duration: {:.3}s",
+                    self.id,
+                    self.id,
+                    self.name,
+                    self.start_seconds(),
+                    self.start_sample,
+                    end_sec,
+                    end,
+                    dur_sec
+                )
+            }
+            None => {
+                format!(
+                    "Marker {} (ID: {}): '{}'\n  Position: {:.3}s ({} samples)",
+                    self.id,
+                    self.id,
+                    self.name,
+                    self.start_seconds(),
+                    self.start_sample
+                )
+            }
+        }
     }
 }
 
 /// Parse all regions from a Reaper WAV file
-pub fn parse_regions_from_file(file_path: &str) -> Result<Vec<Region>, Box<dyn Error>> {
+pub fn parse_regions_from_file(file_path: &str) -> Result<Vec<Marker>, Box<dyn Error>> {
     let file = std::fs::File::open(file_path)?;
     let riff_file = RiffFile::read(file, file_path.to_string())?;
 
@@ -91,13 +110,16 @@ pub fn parse_regions_from_file(file_path: &str) -> Result<Vec<Region>, Box<dyn E
     let labels = parse_labels(&riff_file);
     debug!("Found {} label(s)", labels.len());
 
-    // Parse sampler chunks
+    // Parse sampler loops
     let sampler_data = parse_sampler_data(&riff_file)?;
 
-    // Match labels with sampler loops
-    let regions = match_regions(labels, sampler_data, sample_rate);
+    // Parse cue points for start positions
+    let cue_points = parse_cue_points(&riff_file)?;
 
-    Ok(regions)
+    // Match everything together
+    let markers = match_markers(labels, sampler_data, cue_points, sample_rate);
+
+    Ok(markers)
 }
 
 /// Internal struct for label data
@@ -232,39 +254,71 @@ fn parse_list_chunk_for_labels(
 }
 
 /// Match labels with sampler loops to create regions
-fn match_regions(
+fn match_markers(
     labels: Vec<Label>,
     sampler_loops: Vec<wavtag::SampleLoop>,
+    cue_points: HashMap<u32, u32>, // NEW: Start positions from 'cue ' chunk
     sample_rate: u32,
-) -> Vec<Region> {
+) -> Vec<Marker> {
     let label_map: HashMap<u32, String> = labels
         .into_iter()
         .map(|label| (label.cue_id, label.name))
         .collect();
 
-    debug!("Label map keys: {:?}", label_map.keys().collect::<Vec<_>>());
-    debug!(
-        "Sampler loop IDs: {:?}",
-        sampler_loops.iter().map(|l| l.id).collect::<Vec<_>>()
-    );
+    let sampler_map: HashMap<u32, u32> = sampler_loops
+        .into_iter()
+        .map(|sl| (sl.id, sl.end))
+        .collect();
 
-    let mut regions = Vec::new();
+    let mut markers = Vec::new();
 
-    for sample_loop in sampler_loops {
-        let name = label_map
-            .get(&sample_loop.id)
-            .map(|s| s.as_str())
-            .unwrap_or("<No Name>")
-            .to_string();
+    for (cue_id, name) in label_map {
+        let end_sample = sampler_map.get(&cue_id).copied();
+        let start_sample = cue_points.get(&cue_id).copied().unwrap_or(0); // Use real start or 0 if missing
 
-        regions.push(Region::new(
-            sample_loop.id,
+        markers.push(Marker::new(
+            cue_id,
             name,
-            sample_loop.start,
-            sample_loop.end,
+            start_sample,
+            end_sample,
             sample_rate,
         ));
     }
 
-    regions
+    // Sort markers by their start time for cleaner output
+    markers.sort_by_key(|m| m.start_sample);
+
+    markers
+}
+
+/// Parse 'cue ' chunk to get cue point positions (start samples)
+fn parse_cue_points(riff_file: &RiffFile) -> Result<HashMap<u32, u32>, Box<dyn Error>> {
+    let mut cue_map = HashMap::new();
+
+    if let Some(cue_chunk) = riff_file.find_chunk_by_type(ChunkType::Cue) {
+        let data = &cue_chunk.data;
+        if data.len() >= 4 {
+            let num_cues = u32::from_le_bytes(data[0..4].try_into()?);
+            debug!("Found {} cue points in 'cue ' chunk", num_cues);
+
+            // Each cue point record is 24 bytes
+            // Structure: dwIdentifier(4), dwPosition(4), fccChunk(4), dwChunkStart(4), dwBlockStart(4), dwSampleOffset(4)
+            let record_size = 24;
+            for i in 0..num_cues {
+                let start = 4 + (i as usize * record_size);
+                if start + record_size <= data.len() {
+                    let cue_id = u32::from_le_bytes(data[start..start + 4].try_into()?);
+                    // The sample position is in dwSampleOffset at offset 20 within the record
+                    let sample_offset =
+                        u32::from_le_bytes(data[start + 20..start + 24].try_into()?);
+                    cue_map.insert(cue_id, sample_offset);
+                    debug!("  Cue ID {} -> Start sample: {}", cue_id, sample_offset);
+                }
+            }
+        }
+    } else {
+        debug!("No 'cue ' chunk found");
+    }
+
+    Ok(cue_map)
 }

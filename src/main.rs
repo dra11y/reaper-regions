@@ -83,7 +83,7 @@ fn main() {
 }
 
 /// JSON output (machine-readable)
-fn output_json(regions: &[reaper_region_reader::Region], file_path: &str) {
+fn output_json(regions: &[reaper_region_reader::Marker], file_path: &str) {
     let output = serde_json::json!({
         "file": file_path,
         "sample_rate": regions.first().map(|r| r.sample_rate).unwrap_or(0),
@@ -96,7 +96,7 @@ fn output_json(regions: &[reaper_region_reader::Region], file_path: &str) {
 
 /// Delimited output (CSV, TSV, PSV)
 fn output_delimited(
-    regions: &[reaper_region_reader::Region],
+    regions: &[reaper_region_reader::Marker],
     delimiter: char,
     include_header: bool,
 ) {
@@ -124,10 +124,19 @@ fn output_delimited(
             region.id.to_string(),
             region.name.clone(),
             region.start_sample.to_string(),
-            region.end_sample.to_string(),
+            // Handle Option<u32> for end_sample
+            region.end_sample.map(|v| v.to_string()).unwrap_or_default(),
             format!("{:.6}", region.start_seconds()),
-            format!("{:.6}", region.end_seconds()),
-            format!("{:.6}", region.duration_seconds()),
+            // Handle Option<f64> for end_seconds
+            region
+                .end_seconds()
+                .map(|v| format!("{:.6}", v))
+                .unwrap_or_default(),
+            // Handle Option<f64> for duration_seconds
+            region
+                .duration_seconds()
+                .map(|v| format!("{:.6}", v))
+                .unwrap_or_default(),
             region.sample_rate.to_string(),
         ]);
     }
@@ -136,33 +145,47 @@ fn output_delimited(
 }
 
 /// Human-readable output
-fn output_human(regions: &[reaper_region_reader::Region], file_path: &str) {
-    println!("=== REGIONS FOUND ===");
+fn output_human(regions: &[reaper_region_reader::Marker], file_path: &str) {
+    println!("=== MARKERS FOUND ===");
     println!("File: {}", file_path);
 
     if let Some(first_region) = regions.first() {
         println!("Sample rate: {} Hz", first_region.sample_rate);
     }
 
-    println!("Total regions: {}\n", regions.len());
+    println!("Total markers: {}\n", regions.len());
 
-    for (i, region) in regions.iter().enumerate() {
-        println!("Region {} (ID: {}): '{}'", i + 1, region.id, region.name);
-        println!(
-            "  Start: {:.3}s ({} samples)",
-            region.start_seconds(),
-            region.start_sample
-        );
-        println!(
-            "  End: {:.3}s ({} samples)",
-            region.end_seconds(),
-            region.end_sample
-        );
-        println!(
-            "  Duration: {:.3}s ({} samples)",
-            region.duration_seconds(),
-            region.duration_samples()
-        );
+    for (i, marker) in regions.iter().enumerate() {
+        match marker.end_sample {
+            Some(end_sample) => {
+                // This is a region
+                println!("Region {} (ID: {}): '{}'", i + 1, marker.id, marker.name);
+                println!(
+                    "  Start: {:.3}s ({} samples)",
+                    marker.start_seconds(),
+                    marker.start_sample
+                );
+                println!(
+                    "  End: {:.3}s ({} samples)",
+                    marker.end_seconds().unwrap(),
+                    end_sample
+                );
+                println!(
+                    "  Duration: {:.3}s ({} samples)",
+                    marker.duration_seconds().unwrap(),
+                    marker.duration_samples().unwrap()
+                );
+            }
+            None => {
+                // This is a simple marker
+                println!("Marker {} (ID: {}): '{}'", i + 1, marker.id, marker.name);
+                println!(
+                    "  Position: {:.3}s ({} samples)",
+                    marker.start_seconds(),
+                    marker.start_sample
+                );
+            }
+        }
 
         if i < regions.len() - 1 {
             println!();

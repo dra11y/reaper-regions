@@ -12,13 +12,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     let file = std::fs::File::open("/Users/tom/Desktop/test.wav")?;
     let riff_file = RiffFile::read(file, "test.wav".to_string())?;
 
+    // DEBUG: List all chunk types found
+    println!("=== CHUNK DISCOVERY ===");
+    for (i, chunk) in riff_file.chunks.iter().enumerate() {
+        println!("  Chunk {}: {:?}", i, chunk.header);
+    }
+
     // -- PART 1: COLLECT ALL REGION NAMES --
     let mut labels = Vec::new();
+    let mut found_standalone_labels = false;
 
     // Strategy 1: Look for standalone 'labl' chunks first
+    println!("\n=== LOOKING FOR STANDALONE LABEL CHUNKS ===");
     for chunk in &riff_file.chunks {
         if chunk.header == ChunkType::Label {
-            // 'labl' chunk structure: [cue_id (4 bytes)][null-terminated text]
+            found_standalone_labels = true;
             if chunk.data.len() >= 4 {
                 let cue_id = u32::from_le_bytes(chunk.data[0..4].try_into()?);
                 let name_bytes = &chunk.data[4..];
@@ -29,7 +37,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let label = Label { cue_id, name };
                 labels.push(label.clone());
                 println!(
-                    "Found Label chunk -> Cue ID: {}, Name: '{}'",
+                    "  Found standalone Label -> Cue ID: {}, Name: '{}'",
                     label.cue_id, label.name
                 );
             }
@@ -37,12 +45,37 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // Strategy 2: If no standalone labels, parse the LIST-adtl chunk
-    if labels.is_empty() {
+    if !found_standalone_labels {
+        println!("\n=== PARSING LIST CHUNK ===");
         if let Some(list_chunk) = riff_file.find_chunk_by_type(ChunkType::List) {
-            println!("Parsing LIST chunk for 'labl' subchunks...");
+            println!("  LIST chunk size: {} bytes", list_chunk.data.len());
+
+            // Print raw hex of first 32 bytes for inspection
+            let preview_len = std::cmp::min(32, list_chunk.data.len());
+            println!("  First {} bytes (hex):", preview_len);
+            for chunk in list_chunk.data[0..preview_len].chunks(8) {
+                print!("    ");
+                for &byte in chunk {
+                    print!("{:02x} ", byte);
+                }
+                println!();
+            }
+
             let list_labels = parse_list_chunk_for_labels(list_chunk)?;
+            println!("  Found {} label(s) in LIST chunk:", list_labels.len());
+            for label in &list_labels {
+                println!("    Cue ID: {}, Name: '{}'", label.cue_id, label.name);
+            }
             labels.extend(list_labels);
+        } else {
+            println!("  No LIST chunk found either.");
         }
+    }
+
+    println!("\n=== TOTAL LABELS COLLECTED ===");
+    println!("  Count: {}", labels.len());
+    for label in &labels {
+        println!("    ID: {} -> '{}'", label.cue_id, label.name);
     }
 
     // Create a HashMap for quick lookup by cue_id
@@ -52,14 +85,40 @@ fn main() -> Result<(), Box<dyn Error>> {
         .collect();
 
     // -- PART 2: GET REGION START/END TIMES FROM SMPL CHUNK --
+    println!("\n=== PARSING SMPL CHUNK ===");
     let sampler_data = if let Some(smpl_chunk) = riff_file.find_chunk_by_type(ChunkType::Sampler) {
-        wavtag::SamplerChunk::from_chunk(smpl_chunk)?
+        let data = wavtag::SamplerChunk::from_chunk(smpl_chunk)?;
+        println!("  Found {} sample loop(s):", data.sample_loops.len());
+        for (i, loop_data) in data.sample_loops.iter().enumerate() {
+            println!(
+                "    Loop {}: ID={}, Start={}, End={}",
+                i + 1,
+                loop_data.id,
+                loop_data.start,
+                loop_data.end
+            );
+        }
+        data
     } else {
-        println!("No 'smpl' chunk found!");
+        println!("  No 'smpl' chunk found!");
         return Ok(());
     };
 
     // -- PART 3: PRINT MATCHED REGIONS --
+    println!("\n=== FINAL REGION MATCHING ===");
+    println!(
+        "  Label map keys: {:?}",
+        label_map.keys().collect::<Vec<_>>()
+    );
+    println!(
+        "  Sampler loop IDs: {:?}",
+        sampler_data
+            .sample_loops
+            .iter()
+            .map(|l| l.id)
+            .collect::<Vec<_>>()
+    );
+
     println!("\n=== FINAL REGION LIST ===");
     for (i, sample_loop) in sampler_data.sample_loops.iter().enumerate() {
         let name = label_map
@@ -81,38 +140,44 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// Helper function to parse 'labl' subchunks from a LIST-adtl chunk
+// parse 'labl' subchunks from a LIST-adtl chunk
 fn parse_list_chunk_for_labels(
     list_chunk: &wavtag::RiffChunk,
-) -> Result<Vec<Label>, Box<dyn Error>> {
+) -> Result<Vec<Label>, Box<dyn std::error::Error>> {
     let mut labels = Vec::new();
     let data = &list_chunk.data;
 
-    // LIST chunk must start with "adtl" for associated data
     if data.len() < 4 || &data[0..4] != b"adtl" {
         return Ok(labels);
     }
 
-    let mut pos = 4; // Start after "adtl"
+    let mut pos = 4;
     while pos + 8 <= data.len() {
-        // Need at least subchunk ID (4) + size (4)
-        let sub_id = std::str::from_utf8(&data[pos..pos + 4]).unwrap_or("");
+        let sub_id = std::str::from_utf8(&data[pos..pos + 4]).unwrap_or("<invalid>");
         let sub_size = u32::from_le_bytes(data[pos + 4..pos + 8].try_into()?) as usize;
 
-        if sub_id == "labl" && pos + 12 + sub_size <= data.len() {
+        // FIXED: The sub_size INCLUDES the 4-byte cue_id field.
+        // Check: 8 (ID+size) + sub_size must fit.
+        if pos + 8 + sub_size > data.len() {
+            break; // Malformed or end of data
+        }
+
+        if sub_id == "labl" && sub_size >= 4 {
             let cue_id = u32::from_le_bytes(data[pos + 8..pos + 12].try_into()?);
-            let text_end = data[pos + 12..pos + 12 + sub_size]
-                .iter()
-                .position(|&b| b == 0)
-                .unwrap_or(sub_size - 4);
-            let name = String::from_utf8_lossy(&data[pos + 12..pos + 12 + text_end])
+            // Text length is sub_size - 4 (for cue_id). Find null terminator.
+            let text_start = pos + 12;
+            let text_end = text_start + (sub_size - 4);
+            let raw_text = &data[text_start..text_end];
+
+            let name = String::from_utf8_lossy(raw_text)
                 .trim_end_matches('\0')
                 .to_string();
 
             labels.push(Label { cue_id, name });
         }
-        // Move to next subchunk (data is padded to even byte boundary)
-        pos += 8 + ((sub_size + 1) & !1);
+        // Move to next subchunk. Pad sub_size to an even number of bytes.
+        let padded_size = (sub_size + 1) & !1;
+        pos += 8 + padded_size;
     }
 
     Ok(labels)

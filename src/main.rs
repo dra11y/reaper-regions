@@ -1,3 +1,4 @@
+use log::{LevelFilter, debug};
 use std::collections::HashMap;
 use std::error::Error;
 use wavtag::{ChunkType, RiffFile};
@@ -9,13 +10,15 @@ struct Label {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init();
+
     let file = std::fs::File::open("/Users/tom/Desktop/test.wav")?;
     let riff_file = RiffFile::read(file, "test.wav".to_string())?;
 
     // DEBUG: List all chunk types found
-    println!("=== CHUNK DISCOVERY ===");
+    debug!("=== CHUNK DISCOVERY ===");
     for (i, chunk) in riff_file.chunks.iter().enumerate() {
-        println!("  Chunk {}: {:?}", i, chunk.header);
+        debug!("  Chunk {}: {:?}", i, chunk.header);
     }
 
     // -- PART 1: COLLECT ALL REGION NAMES --
@@ -23,7 +26,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut found_standalone_labels = false;
 
     // Strategy 1: Look for standalone 'labl' chunks first
-    println!("\n=== LOOKING FOR STANDALONE LABEL CHUNKS ===");
+    debug!("\n=== LOOKING FOR STANDALONE LABEL CHUNKS ===");
     for chunk in &riff_file.chunks {
         if chunk.header == ChunkType::Label {
             found_standalone_labels = true;
@@ -36,7 +39,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 let label = Label { cue_id, name };
                 labels.push(label.clone());
-                println!(
+                debug!(
                     "  Found standalone Label -> Cue ID: {}, Name: '{}'",
                     label.cue_id, label.name
                 );
@@ -46,36 +49,37 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Strategy 2: If no standalone labels, parse the LIST-adtl chunk
     if !found_standalone_labels {
-        println!("\n=== PARSING LIST CHUNK ===");
+        debug!("\n=== PARSING LIST CHUNK ===");
         if let Some(list_chunk) = riff_file.find_chunk_by_type(ChunkType::List) {
-            println!("  LIST chunk size: {} bytes", list_chunk.data.len());
+            debug!("  LIST chunk size: {} bytes", list_chunk.data.len());
 
             // Print raw hex of first 32 bytes for inspection
             let preview_len = std::cmp::min(32, list_chunk.data.len());
-            println!("  First {} bytes (hex):", preview_len);
-            for chunk in list_chunk.data[0..preview_len].chunks(8) {
-                print!("    ");
-                for &byte in chunk {
-                    print!("{:02x} ", byte);
+            debug!("  First {} bytes (hex):", preview_len);
+            if log::max_level() == LevelFilter::Debug {
+                for chunk in list_chunk.data[0..preview_len].chunks(8) {
+                    print!("    ");
+                    for &byte in chunk {
+                        print!("{:02x} ", byte);
+                    }
                 }
-                println!();
             }
 
             let list_labels = parse_list_chunk_for_labels(list_chunk)?;
-            println!("  Found {} label(s) in LIST chunk:", list_labels.len());
+            debug!("  Found {} label(s) in LIST chunk:", list_labels.len());
             for label in &list_labels {
-                println!("    Cue ID: {}, Name: '{}'", label.cue_id, label.name);
+                debug!("    Cue ID: {}, Name: '{}'", label.cue_id, label.name);
             }
             labels.extend(list_labels);
         } else {
-            println!("  No LIST chunk found either.");
+            debug!("  No LIST chunk found either.");
         }
     }
 
-    println!("\n=== TOTAL LABELS COLLECTED ===");
-    println!("  Count: {}", labels.len());
+    debug!("\n=== TOTAL LABELS COLLECTED ===");
+    debug!("  Count: {}", labels.len());
     for label in &labels {
-        println!("    ID: {} -> '{}'", label.cue_id, label.name);
+        debug!("    ID: {} -> '{}'", label.cue_id, label.name);
     }
 
     // Create a HashMap for quick lookup by cue_id
@@ -85,12 +89,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         .collect();
 
     // -- PART 2: GET REGION START/END TIMES FROM SMPL CHUNK --
-    println!("\n=== PARSING SMPL CHUNK ===");
+    debug!("\n=== PARSING SMPL CHUNK ===");
     let sampler_data = if let Some(smpl_chunk) = riff_file.find_chunk_by_type(ChunkType::Sampler) {
         let data = wavtag::SamplerChunk::from_chunk(smpl_chunk)?;
-        println!("  Found {} sample loop(s):", data.sample_loops.len());
+        debug!("  Found {} sample loop(s):", data.sample_loops.len());
         for (i, loop_data) in data.sample_loops.iter().enumerate() {
-            println!(
+            debug!(
                 "    Loop {}: ID={}, Start={}, End={}",
                 i + 1,
                 loop_data.id,
@@ -100,17 +104,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         data
     } else {
-        println!("  No 'smpl' chunk found!");
+        debug!("  No 'smpl' chunk found!");
         return Ok(());
     };
 
     // -- PART 3: PRINT MATCHED REGIONS --
-    println!("\n=== FINAL REGION MATCHING ===");
-    println!(
+    debug!("\n=== FINAL REGION MATCHING ===");
+    debug!(
         "  Label map keys: {:?}",
         label_map.keys().collect::<Vec<_>>()
     );
-    println!(
+    debug!(
         "  Sampler loop IDs: {:?}",
         sampler_data
             .sample_loops
@@ -119,7 +123,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             .collect::<Vec<_>>()
     );
 
-    println!("\n=== FINAL REGION LIST ===");
+    debug!("\n=== FINAL REGION LIST ===");
     for (i, sample_loop) in sampler_data.sample_loops.iter().enumerate() {
         let name = label_map
             .get(&sample_loop.id)
@@ -130,8 +134,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let start_sec = sample_loop.start as f64 / 48000.0;
         let end_sec = sample_loop.end as f64 / 48000.0;
 
-        println!("Region {} (ID: {}): '{}'", i + 1, sample_loop.id, name);
-        println!(
+        debug!("Region {} (ID: {}): '{}'", i + 1, sample_loop.id, name);
+        debug!(
             "  Start: {:.3}s ({} samples), End: {:.3}s ({} samples)",
             start_sec, sample_loop.start, end_sec, sample_loop.end
         );

@@ -1,9 +1,16 @@
 [package]
 name = "reaper-region-reader"
 version = "0.1.0"
+description = "Parse Reaper region markers from WAV files"
 edition = "2024"
 
+[workspace]
+members = ["wavtag"]
+
 [dependencies]
+clap = { version = "4", features = ["derive"] }
 env_logger = "0.11"
 log = "0.4"
-wavtag = { git = "https://github.com/monomadic/zodak.git", package = "wavtag" }
+serde = { version = "1", features = ["derive"] }
+# https://github.com/monomadic/zodak.git
+wavtag = { path = "wavtag" }

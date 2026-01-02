@@ -1,7 +1,7 @@
 [package]
-name = "reaper-region-reader"
+name = "reaper-regions"
 version = "0.1.0"
-description = "Parse Reaper region markers from WAV files"
+description = "Read REAPER region markers from WAV files"
 edition = "2024"
 
 [workspace]

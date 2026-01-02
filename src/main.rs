@@ -1,4 +1,4 @@
-use clap::{Arg, ArgAction, Command};
+use clap::{Parser, ValueEnum};
 use env_logger::Builder;
 use log::{error, warn};
 use reaper_region_reader::parse_regions_from_file;
@@ -6,44 +6,47 @@ use serde_json;
 use std::io;
 use std::process;
 
+/// Extract Reaper region markers from WAV files
+#[derive(Parser)]
+#[command(name = "reaper-region-reader")]
+#[command(version = "0.1.0")]
+#[command(about = "Extracts Reaper region markers from WAV files", long_about = None)]
+struct Cli {
+    /// Input WAV file
+    file: String,
+
+    /// Output format
+    #[arg(short, long, value_enum, default_value_t = OutputFormat::Human)]
+    format: OutputFormat,
+
+    /// Enable debug logging
+    #[arg(short, long)]
+    debug: bool,
+
+    /// Omit header row in CSV/TSV/PSV output
+    #[arg(long)]
+    no_header: bool,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum OutputFormat {
+    /// JSON format (machine-readable)
+    Json,
+    /// Comma-separated values
+    Csv,
+    /// Tab-separated values
+    Tsv,
+    /// Pipe-separated values
+    Psv,
+    /// Human-readable format
+    Human,
+}
+
 fn main() {
-    // Set up command line arguments
-    let matches = Command::new("reaper-region-reader")
-        .version("0.1.0")
-        .author("Your Name")
-        .about("Extracts Reaper region markers from WAV files")
-        .arg(
-            Arg::new("FILE")
-                .help("Input WAV file")
-                .required(true)
-                .index(1),
-        )
-        .arg(
-            Arg::new("format")
-                .short('f')
-                .long("format")
-                .value_name("FORMAT")
-                .help("Output format")
-                .value_parser(["json", "csv", "tsv", "psv", "human"])
-                .default_value("human"),
-        )
-        .arg(
-            Arg::new("debug")
-                .short('d')
-                .long("debug")
-                .help("Enable debug logging")
-                .action(ArgAction::SetTrue),
-        )
-        .arg(
-            Arg::new("no-header")
-                .long("no-header")
-                .help("Omit header row in CSV/TSV/PSV output")
-                .action(ArgAction::SetTrue),
-        )
-        .get_matches();
+    let cli = Cli::parse();
 
     // Configure logging
-    let log_level = if matches.get_flag("debug") {
+    let log_level = if cli.debug {
         log::LevelFilter::Debug
     } else {
         log::LevelFilter::Warn
@@ -55,32 +58,27 @@ fn main() {
         .format_timestamp(None)
         .init();
 
-    let file_path = matches.get_one::<String>("FILE").unwrap();
-    let format = matches.get_one::<String>("format").unwrap();
-    let no_header = matches.get_flag("no-header");
-
     // Parse regions
-    let regions = match parse_regions_from_file(file_path) {
+    let regions = match parse_regions_from_file(&cli.file) {
         Ok(regions) => regions,
         Err(e) => {
-            error!("Failed to parse '{}': {}", file_path, e);
+            error!("Failed to parse '{}': {}", cli.file, e);
             process::exit(1);
         }
     };
 
     if regions.is_empty() {
-        warn!("No regions found in '{}'", file_path);
+        warn!("No regions found in '{}'", cli.file);
         process::exit(0);
     }
 
     // Output in requested format
-    match format.as_str() {
-        "json" => output_json(&regions, file_path),
-        "csv" => output_delimited(&regions, ',', !no_header),
-        "tsv" => output_delimited(&regions, '\t', !no_header),
-        "psv" => output_delimited(&regions, '|', !no_header),
-        "human" => output_human(&regions, file_path),
-        _ => unreachable!(), // Clap validates this
+    match cli.format {
+        OutputFormat::Json => output_json(&regions, &cli.file),
+        OutputFormat::Csv => output_delimited(&regions, ',', !cli.no_header),
+        OutputFormat::Tsv => output_delimited(&regions, '\t', !cli.no_header),
+        OutputFormat::Psv => output_delimited(&regions, '|', !cli.no_header),
+        OutputFormat::Human => output_human(&regions, &cli.file),
     }
 }
 

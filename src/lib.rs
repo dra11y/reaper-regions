@@ -1,10 +1,11 @@
 use log::{debug, error, warn};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use wavtag::{ChunkType, RiffFile};
 
 /// Represents a labeled region in a Reaper WAV file
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Region {
     /// Unique identifier matching the cue point
     pub id: u32,

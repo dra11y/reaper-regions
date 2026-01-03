@@ -11,7 +11,7 @@ use wavtag::{ChunkType, RiffFile};
 pub enum Reason {
     /// No label chunks were found in the file
     NoLabels,
-    /// Labels were found but no 'smpl' (sampler) chunk
+    /// No 'smpl' (sampler) chunk was found in the file
     NoSamplerData,
     /// Labels and/or sampler data found but no 'cue ' chunk
     NoCuePoints,

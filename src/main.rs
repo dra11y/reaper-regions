@@ -1,11 +1,12 @@
 use clap::{Parser, ValueEnum};
 use env_logger::Builder;
-use log::{error, warn};
-use reaper_region_reader::Marker;
-use reaper_region_reader::parse_regions_from_file;
+use log::error;
+use reaper_regions::ParseResult;
+use reaper_regions::parse_markers_from_file;
 use serde_json;
 use std::io;
 use std::process;
+use strum::EnumMessage;
 
 /// Extract Reaper region markers from WAV files
 #[derive(Parser)]
@@ -60,43 +61,38 @@ fn main() {
         .init();
 
     // Parse regions
-    let regions = match parse_regions_from_file(&cli.file) {
-        Ok(regions) => regions,
+    let result = match parse_markers_from_file(&cli.file) {
+        Ok(result) => result,
         Err(e) => {
             error!("Failed to parse '{}': {}", cli.file, e);
             process::exit(1);
         }
     };
 
-    if regions.is_empty() {
-        warn!("No regions found in '{}'", cli.file);
-        process::exit(0);
-    }
-
     // Output in requested format
     match cli.format {
-        OutputFormat::Json => output_json(&regions, &cli.file),
-        OutputFormat::Csv => output_delimited(&regions, ',', !cli.no_header),
-        OutputFormat::Tsv => output_delimited(&regions, '\t', !cli.no_header),
-        OutputFormat::Psv => output_delimited(&regions, '|', !cli.no_header),
-        OutputFormat::Human => output_human(&regions, &cli.file),
+        OutputFormat::Json => output_json(&result),
+        OutputFormat::Csv => output_delimited(&result, ',', !cli.no_header),
+        OutputFormat::Tsv => output_delimited(&result, '\t', !cli.no_header),
+        OutputFormat::Psv => output_delimited(&result, '|', !cli.no_header),
+        OutputFormat::Human => output_human(&result),
     }
 }
 
 /// JSON output (machine-readable)
-fn output_json(regions: &[reaper_region_reader::Marker], file_path: &str) {
+fn output_json(result: &ParseResult) {
     let output = serde_json::json!({
-        "file": file_path,
-        "sample_rate": regions.first().map(|r| r.sample_rate).unwrap_or(0),
-        "region_count": regions.len(),
-        "regions": regions
+        "file": result.path,
+        "sample_rate": result.markers.first().map(|r| r.sample_rate),
+        "markers": result.markers,
+        "reason": result.reason,
     });
 
     println!("{}", serde_json::to_string_pretty(&output).unwrap());
 }
 
 /// Delimited output (CSV, TSV, PSV)
-fn output_delimited(markers: &[Marker], delimiter: char, include_header: bool) {
+fn output_delimited(result: &ParseResult, delimiter: char, include_header: bool) {
     let mut wtr = csv::WriterBuilder::new()
         .delimiter(delimiter as u8)
         .from_writer(io::stdout());
@@ -117,7 +113,7 @@ fn output_delimited(markers: &[Marker], delimiter: char, include_header: bool) {
     }
 
     // Data rows
-    for marker in markers {
+    for marker in &result.markers {
         let _ = wtr.write_record(&[
             format!("{:?}", marker.marker_type).to_lowercase(),
             marker.id.to_string(),
@@ -142,17 +138,24 @@ fn output_delimited(markers: &[Marker], delimiter: char, include_header: bool) {
 }
 
 /// Human-readable output
-fn output_human(regions: &[reaper_region_reader::Marker], file_path: &str) {
+fn output_human(result: &ParseResult) {
     println!("=== MARKERS FOUND ===");
-    println!("File: {}", file_path);
+    println!("File: {}", result.path);
 
-    if let Some(first_region) = regions.first() {
+    if let Some(first_region) = result.markers.first() {
         println!("Sample rate: {} Hz", first_region.sample_rate);
     }
 
-    println!("Total markers: {}\n", regions.len());
+    println!("Total markers: {}", result.markers.len());
 
-    for (i, marker) in regions.iter().enumerate() {
+    if let Some(reason) = result.reason {
+        match reason.get_documentation() {
+            Some(docs) => println!("Reason: {reason:?}: {docs}\n"),
+            None => println!("Reason: {reason:?}\n"),
+        }
+    }
+
+    for (i, marker) in result.markers.iter().enumerate() {
         match marker.end_sample {
             Some(end_sample) => {
                 // This is a region
@@ -184,7 +187,7 @@ fn output_human(regions: &[reaper_region_reader::Marker], file_path: &str) {
             }
         }
 
-        if i < regions.len() - 1 {
+        if i < result.markers.len() - 1 {
             println!();
         }
     }

@@ -3,7 +3,7 @@ use std::io::{Cursor, Error, ErrorKind};
 
 use byteorder::ReadBytesExt;
 
-use crate::{ChunkType, RiffChunk, RiffFile};
+use crate::wavtag::{ChunkType, RiffChunk, RiffFile};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InstrumentChunk {
@@ -95,4 +95,3 @@ impl RiffFile {
         });
     }
 }
-

@@ -4,7 +4,7 @@ use std::fs;
 use std::io;
 use std::io::{Cursor, Error, ErrorKind, Read, Write};
 
-use crate::utils;
+use crate::wavtag::utils;
 
 pub struct RiffChunk {
     pub header: ChunkType,
@@ -81,7 +81,7 @@ impl RiffFile {
     pub fn len(&self) -> usize {
         // (4 for WAVE header chunk, RIFF chunk not included)
         4 + self.chunks.iter().fold(0, |acc, &ref chunk| {
-            acc + crate::utils::padded_size(chunk.len() as u32) as usize + 8
+            acc + super::utils::padded_size(chunk.len() as u32) as usize + 8
         }) // add 8 bytes for each chunks header
     }
 
@@ -138,9 +138,9 @@ impl RiffFile {
                 Ok(length) => length,
             };
 
-            let chunk = Cursor::new(crate::utils::read_bytes(
+            let chunk = Cursor::new(super::utils::read_bytes(
                 &mut reader,
-                crate::utils::padded_size(chunk_len) as usize,
+                super::utils::padded_size(chunk_len) as usize,
             )?);
 
             chunks.push(RiffChunk {

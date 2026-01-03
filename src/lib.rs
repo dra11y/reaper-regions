@@ -1,8 +1,44 @@
-use log::{debug, error, warn};
+mod wavtag;
+
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use wavtag::{ChunkType, RiffFile};
+
+/// Reason for missing or incomplete markers
+#[derive(Debug, strum::EnumMessage, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Reason {
+    /// No label chunks were found in the file
+    NoLabels,
+    /// Labels were found but no 'smpl' (sampler) chunk
+    NoSamplerData,
+    /// Labels and/or sampler data found but no 'cue ' chunk
+    NoCuePoints,
+    /// Metadata exists but couldn't be matched into markers
+    NoMarkersMatched,
+}
+
+/// Parsing error
+#[derive(Debug, wherror::Error)]
+#[error(debug)]
+pub enum ParseError {
+    Io(#[from] std::io::Error),
+    MissingFormatChunk,
+    #[error("Format chunk length: expected >= 8, got {0}")]
+    InvalidFormatChunk(usize),
+    #[error("bytes to little endian at step: {0}")]
+    BytesToLe(String),
+    Other(String),
+}
+
+/// The result of parsing a WAV file
+#[derive(Debug, Default, Serialize)]
+pub struct ParseResult {
+    pub path: String,
+    pub markers: Vec<Marker>,
+    pub reason: Option<Reason>,
+}
 
 /// Type of the marker
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -122,34 +158,42 @@ impl Marker {
     }
 }
 
-/// Parse all regions from a Reaper WAV file
-pub fn parse_regions_from_file(file_path: &str) -> Result<Vec<Marker>, Box<dyn Error>> {
+/// Parse all markers from a Reaper WAV file
+pub fn parse_markers_from_file(file_path: &str) -> Result<ParseResult, ParseError> {
     let file = std::fs::File::open(file_path)?;
     let riff_file = RiffFile::read(file, file_path.to_string())?;
-
-    debug!("=== CHUNK DISCOVERY ===");
-    for (i, chunk) in riff_file.chunks.iter().enumerate() {
-        debug!("  Chunk {}: {:?}", i, chunk.header);
-    }
 
     // Get sample rate from format chunk
     let sample_rate = get_sample_rate(&riff_file)?;
     debug!("Sample rate: {} Hz", sample_rate);
+
+    let mut result = ParseResult {
+        path: file_path.to_string(),
+        ..ParseResult::default()
+    };
 
     // Parse labels
     let labels = parse_labels(&riff_file);
     debug!("Found {} label(s)", labels.len());
 
     // Parse sampler loops
-    let sampler_data = parse_sampler_data(&riff_file)?;
+    let Some(sampler_data) = parse_sampler_data(&riff_file)? else {
+        debug!("No sample loops found.");
+        result.reason = Some(Reason::NoSamplerData);
+        return Ok(result);
+    };
 
     // Parse cue points for start positions
-    let cue_points = parse_cue_points(&riff_file)?;
+    let Some(cue_points) = parse_cue_points(&riff_file)? else {
+        debug!("No cue points found.");
+        result.reason = Some(Reason::NoCuePoints);
+        return Ok(result);
+    };
 
     // Match everything together
-    let markers = match_markers(labels, sampler_data, cue_points, sample_rate);
+    result.markers = match_markers(labels, sampler_data, cue_points, sample_rate);
 
-    Ok(markers)
+    Ok(result)
 }
 
 /// Internal struct for label data
@@ -160,21 +204,26 @@ struct Label {
 }
 
 /// Parse sample rate from format chunk
-fn get_sample_rate(riff_file: &RiffFile) -> Result<u32, Box<dyn Error>> {
-    if let Some(format_chunk) = riff_file.find_chunk_by_type(ChunkType::Format) {
-        // Format chunk structure for PCM:
-        // Offset 0-1: Audio format (1 for PCM)
-        // Offset 2-3: Number of channels
-        // Offset 4-7: Sample rate (u32, little-endian)
-        if format_chunk.data.len() >= 8 {
-            let sample_rate_bytes = &format_chunk.data[4..8];
-            let sample_rate = u32::from_le_bytes(sample_rate_bytes.try_into()?);
-            return Ok(sample_rate);
-        }
+fn get_sample_rate(riff_file: &RiffFile) -> Result<u32, ParseError> {
+    let format_chunk = riff_file
+        .find_chunk_by_type(ChunkType::Format)
+        .ok_or(ParseError::MissingFormatChunk)?;
+    // Format chunk structure for PCM:
+    // Offset 0-1: Audio format (1 for PCM)
+    // Offset 2-3: Number of channels
+    // Offset 4-7: Sample rate (u32, little-endian)
+    let len = format_chunk.data.len();
+    if len < 8 {
+        warn!("Format chunk too short: expected >= 8, got: {len}");
+        return Err(ParseError::InvalidFormatChunk(len));
     }
-
-    warn!("Could not determine sample rate from format chunk, defaulting to 48000 Hz");
-    Ok(48000) // Default to 48kHz if we can't determine
+    let sample_rate_bytes = &format_chunk.data[4..8];
+    let sample_rate = u32::from_le_bytes(
+        sample_rate_bytes
+            .try_into()
+            .map_err(|_| ParseError::BytesToLe("sample rate".into()))?,
+    );
+    Ok(sample_rate)
 }
 
 /// Parse all labels from the file (standalone or LIST chunks)
@@ -231,14 +280,14 @@ fn parse_labels(riff_file: &RiffFile) -> Vec<Label> {
 }
 
 /// Parse sampler chunk data
-fn parse_sampler_data(riff_file: &RiffFile) -> Result<Vec<wavtag::SampleLoop>, Box<dyn Error>> {
+fn parse_sampler_data(riff_file: &RiffFile) -> Result<Option<Vec<wavtag::SampleLoop>>, ParseError> {
     if let Some(smpl_chunk) = riff_file.find_chunk_by_type(ChunkType::Sampler) {
         let sampler_data = wavtag::SamplerChunk::from_chunk(smpl_chunk)?;
         debug!("Found {} sample loop(s)", sampler_data.sample_loops.len());
-        Ok(sampler_data.sample_loops)
+        Ok(Some(sampler_data.sample_loops))
     } else {
-        error!("No 'smpl' chunk found!");
-        Err("No sampler chunk found in WAV file".into())
+        warn!("No 'smpl' chunk found!");
+        Ok(None)
     }
 }
 
@@ -256,14 +305,22 @@ fn parse_list_chunk_for_labels(
     let mut pos = 4;
     while pos + 8 <= data.len() {
         let sub_id = std::str::from_utf8(&data[pos..pos + 4]).unwrap_or("<invalid>");
-        let sub_size = u32::from_le_bytes(data[pos + 4..pos + 8].try_into()?) as usize;
+        let sub_size = u32::from_le_bytes(
+            data[pos + 4..pos + 8]
+                .try_into()
+                .map_err(|_| ParseError::BytesToLe("'labl' chunk".into()))?,
+        ) as usize;
 
         if pos + 8 + sub_size > data.len() {
             break;
         }
 
         if sub_id == "labl" && sub_size >= 4 {
-            let cue_id = u32::from_le_bytes(data[pos + 8..pos + 12].try_into()?);
+            let cue_id = u32::from_le_bytes(
+                data[pos + 8..pos + 12]
+                    .try_into()
+                    .map_err(|_| ParseError::BytesToLe("cue ID".into()))?,
+            );
             let text_start = pos + 12;
             let text_end = text_start + (sub_size - 4);
             let raw_text = &data[text_start..text_end];
@@ -322,33 +379,48 @@ fn match_markers(
 }
 
 /// Parse 'cue ' chunk to get cue point positions (start samples)
-fn parse_cue_points(riff_file: &RiffFile) -> Result<HashMap<u32, u32>, Box<dyn Error>> {
+fn parse_cue_points(riff_file: &RiffFile) -> Result<Option<HashMap<u32, u32>>, ParseError> {
     let mut cue_map = HashMap::new();
 
-    if let Some(cue_chunk) = riff_file.find_chunk_by_type(ChunkType::Cue) {
-        let data = &cue_chunk.data;
-        if data.len() >= 4 {
-            let num_cues = u32::from_le_bytes(data[0..4].try_into()?);
-            debug!("Found {} cue points in 'cue ' chunk", num_cues);
-
-            // Each cue point record is 24 bytes
-            // Structure: dwIdentifier(4), dwPosition(4), fccChunk(4), dwChunkStart(4), dwBlockStart(4), dwSampleOffset(4)
-            let record_size = 24;
-            for i in 0..num_cues {
-                let start = 4 + (i as usize * record_size);
-                if start + record_size <= data.len() {
-                    let cue_id = u32::from_le_bytes(data[start..start + 4].try_into()?);
-                    // The sample position is in dwSampleOffset at offset 20 within the record
-                    let sample_offset =
-                        u32::from_le_bytes(data[start + 20..start + 24].try_into()?);
-                    cue_map.insert(cue_id, sample_offset);
-                    debug!("  Cue ID {} -> Start sample: {}", cue_id, sample_offset);
-                }
-            }
-        }
-    } else {
+    let Some(cue_chunk) = riff_file.find_chunk_by_type(ChunkType::Cue) else {
         debug!("No 'cue ' chunk found");
+        return Ok(None);
+    };
+
+    let data = &cue_chunk.data;
+    if data.len() < 4 {
+        warn!("expected 'cue ' chunk length >= 4, got {}", data.len());
+        return Ok(None);
     }
 
-    Ok(cue_map)
+    let num_cues = u32::from_le_bytes(
+        data[0..4]
+            .try_into()
+            .map_err(|_| ParseError::BytesToLe("number of cues".into()))?,
+    );
+    debug!("Found {} cue points in 'cue ' chunk", num_cues);
+
+    // Each cue point record is 24 bytes
+    // Structure: dwIdentifier(4), dwPosition(4), fccChunk(4), dwChunkStart(4), dwBlockStart(4), dwSampleOffset(4)
+    let record_size = 24;
+    for i in 0..num_cues {
+        let start = 4 + (i as usize * record_size);
+        if start + record_size <= data.len() {
+            let cue_id = u32::from_le_bytes(
+                data[start..start + 4]
+                    .try_into()
+                    .map_err(|_| ParseError::BytesToLe("cue id".into()))?,
+            );
+            // The sample position is in dwSampleOffset at offset 20 within the record
+            let sample_offset = u32::from_le_bytes(
+                data[start + 20..start + 24]
+                    .try_into()
+                    .map_err(|_| ParseError::BytesToLe("sample offset".into()))?,
+            );
+            cue_map.insert(cue_id, sample_offset);
+            debug!("  Cue ID {} -> Start sample: {}", cue_id, sample_offset);
+        }
+    }
+
+    Ok(Some(cue_map))
 }

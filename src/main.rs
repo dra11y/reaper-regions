@@ -101,11 +101,11 @@ fn output_delimited(result: &ParseResult, delimiter: char, include_header: bool)
             "type",
             "id",
             "name",
-            "start_sample",
-            "end_sample",
-            "start_seconds",
-            "end_seconds",
-            "duration_seconds",
+            "start",
+            "end",
+            "start_time",
+            "end_time",
+            "duration",
             "sample_rate",
         ]);
     }
@@ -113,19 +113,19 @@ fn output_delimited(result: &ParseResult, delimiter: char, include_header: bool)
     // Data rows
     for marker in &result.markers {
         let _ = wtr.write_record(&[
-            format!("{:?}", marker.marker_type).to_lowercase(),
+            format!("{:?}", marker.r#type).to_lowercase(),
             marker.id.to_string(),
             marker.name.clone(),
-            marker.start_sample.to_string(),
-            marker.end_sample.map(|v| v.to_string()).unwrap_or_default(),
+            marker.start.to_string(),
+            marker.end.map(|v| v.to_string()).unwrap_or_default(),
             // Use the pre-calculated fields.
-            format!("{:.3}", round3(marker.start_sec)),
+            format!("{:.3}", round3(marker.start_time)),
             marker
-                .end_sec
+                .end_time
                 .map(|v| format!("{:.3}", round3(v)))
                 .unwrap_or_default(),
             marker
-                .duration_sec
+                .duration
                 .map(|v| format!("{:.3}", round3(v)))
                 .unwrap_or_default(),
             result.sample_rate.to_string(),
@@ -162,24 +162,23 @@ fn output_human(result: &ParseResult) {
     println!();
 
     for marker in result.markers.iter() {
-        match marker.end_sample {
+        match marker.end {
             Some(end_sample) => {
                 // This is a region
                 println!("Region (ID: {}): '{}'", marker.id, marker.name);
                 println!(
                     "  Start: {:.3}s ({} samples)",
-                    marker.start_seconds(),
-                    marker.start_sample
+                    marker.start_time, marker.start
                 );
                 println!(
                     "  End: {:.3}s ({} samples)",
-                    marker.end_seconds().unwrap(),
+                    marker.end_time.unwrap(),
                     end_sample
                 );
                 println!(
                     "  Duration: {:.3}s ({} samples)",
-                    marker.duration_seconds().unwrap(),
-                    marker.duration_samples().unwrap()
+                    marker.duration.unwrap(),
+                    marker.duration.unwrap()
                 );
             }
             None => {
@@ -187,8 +186,7 @@ fn output_human(result: &ParseResult) {
                 println!("Marker (ID: {}): '{}'", marker.id, marker.name);
                 println!(
                     "  Position: {:.3}s ({} samples)",
-                    marker.start_seconds(),
-                    marker.start_sample
+                    marker.start_time, marker.start
                 );
             }
         }

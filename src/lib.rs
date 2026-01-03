@@ -79,27 +79,27 @@ pub struct Marker {
     /// Name (from 'labl' chunk)
     pub name: String,
     /// Type of marker (Marker or Region)
-    pub marker_type: MarkerType,
+    pub r#type: MarkerType,
     /// Start position in samples
-    pub start_sample: u32,
+    pub start: u32,
     /// End position in samples (None for simple markers)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_sample: Option<u32>,
+    pub end: Option<u32>,
     /// DERIVED: Start time in seconds
     #[serde(serialize_with = "serialize_f64")]
-    pub start_sec: f64,
+    pub start_time: f64,
     /// DERIVED: End time in seconds (None for simple markers)
     #[serde(
         serialize_with = "serialize_opt_f64",
         skip_serializing_if = "Option::is_none"
     )]
-    pub end_sec: Option<f64>,
+    pub end_time: Option<f64>,
     /// DERIVED: Duration in seconds (None for simple markers)
     #[serde(
         serialize_with = "serialize_opt_f64",
         skip_serializing_if = "Option::is_none"
     )]
-    pub duration_sec: Option<f64>,
+    pub duration: Option<f64>,
 }
 
 pub fn round3(value: f64) -> f64 {
@@ -127,25 +127,19 @@ where
 
 impl Marker {
     /// Create a new marker or region
-    pub fn new(
-        id: u32,
-        name: String,
-        start_sample: u32,
-        end_sample: Option<u32>,
-        sample_rate: u32,
-    ) -> Self {
-        let marker_type = if end_sample.is_some() {
+    pub fn new(id: u32, name: String, start: u32, end: Option<u32>, sample_rate: u32) -> Self {
+        let marker_type = if end.is_some() {
             MarkerType::Region
         } else {
             MarkerType::Marker
         };
 
         // Calculate derived time values
-        let start_sec = start_sample as f64 / sample_rate as f64;
-        let (end_sec, duration_sec) = match end_sample {
+        let start_time = start as f64 / sample_rate as f64;
+        let (end_time, duration) = match end {
             Some(end) => {
                 let end_s = end as f64 / sample_rate as f64;
-                let dur_s = end_s - start_sec;
+                let dur_s = end_s - start_time;
                 (Some(end_s), Some(dur_s))
             }
             None => (None, None),
@@ -154,56 +148,35 @@ impl Marker {
         Marker {
             id,
             name,
-            marker_type,
-            start_sample,
-            end_sample,
-            start_sec,
-            end_sec,
-            duration_sec,
+            r#type: marker_type,
+            start,
+            end,
+            start_time,
+            end_time,
+            duration,
         }
-    }
-
-    /// Get start time in seconds
-    pub fn start_seconds(&self) -> f64 {
-        self.start_sec
-    }
-
-    /// Get end time in seconds
-    pub fn end_seconds(&self) -> Option<f64> {
-        self.end_sec
-    }
-
-    /// Get duration in seconds
-    pub fn duration_seconds(&self) -> Option<f64> {
-        self.duration_sec
-    }
-
-    /// Get duration in samples
-    pub fn duration_samples(&self) -> Option<u32> {
-        self.end_sample
-            .map(|end_sample| end_sample - self.start_sample)
     }
 
     /// Format marker as a string
     pub fn format(&self) -> String {
-        match self.marker_type {
+        match self.r#type {
             MarkerType::Region => {
-                let end = self.end_sample.unwrap();
+                let end = self.end.unwrap();
                 format!(
                     "Region (ID: {}): '{}'\n  Start: {:.3}s ({} samples), End: {:.3}s ({} samples), Duration: {:.3}s",
                     self.id,
                     self.name,
-                    self.start_sec,
-                    self.start_sample,
-                    self.end_sec.unwrap(),
+                    self.start_time,
+                    self.start,
+                    self.end_time.unwrap(),
                     end,
-                    self.duration_sec.unwrap()
+                    self.duration.unwrap()
                 )
             }
             MarkerType::Marker => {
                 format!(
                     "Marker (ID: {}): '{}'\n  Position: {:.3}s ({} samples)",
-                    self.id, self.name, self.start_sec, self.start_sample
+                    self.id, self.name, self.start_time, self.start
                 )
             }
         }
@@ -422,20 +395,14 @@ fn match_markers(
     let mut markers = Vec::new();
 
     for (cue_id, name) in label_map {
-        let end_sample = sampler_map.get(&cue_id).copied();
-        let start_sample = cue_points.get(&cue_id).copied().unwrap_or(0); // Use real start or 0 if missing
+        let end = sampler_map.get(&cue_id).copied();
+        let start = cue_points.get(&cue_id).copied().unwrap_or(0); // Use real start or 0 if missing
 
-        markers.push(Marker::new(
-            cue_id,
-            name,
-            start_sample,
-            end_sample,
-            sample_rate,
-        ));
+        markers.push(Marker::new(cue_id, name, start, end, sample_rate));
     }
 
     // Sort markers by their start time for cleaner output
-    markers.sort_by_key(|m| m.start_sample);
+    markers.sort_by_key(|m| m.start);
 
     markers
 }

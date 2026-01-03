@@ -27,13 +27,9 @@ use serde_json;
 use std::io;
 use strum::EnumMessage;
 
-/// Command-line interface arguments for the Reaper Regions parser.
-///
-/// This struct defines all command-line options using the Clap derive macro.
-/// It supports file input, output format selection, debug logging, and
-/// header control for delimited outputs.
+/// Extract Reaper region markers from WAV files.
 #[derive(Parser)]
-#[command(version, about)]
+#[command(version, about, arg_required_else_help = true)]
 struct Cli {
     /// Path to the input WAV file containing Reaper markers.
     ///

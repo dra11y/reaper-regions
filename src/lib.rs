@@ -2,8 +2,8 @@ mod wavtag;
 
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::error::Error;
+use std::{collections::HashMap, error::Error};
+use strum::EnumMessage;
 use wavtag::{ChunkType, RiffFile};
 
 /// Reason for missing or incomplete markers
@@ -24,6 +24,10 @@ pub enum Reason {
 #[error(debug)]
 pub enum ParseError {
     Io(#[from] std::io::Error),
+    #[error("no WAVE tag found")]
+    NoWaveTag,
+    #[error("no RIFF tag found")]
+    NoRiffTag,
     MissingFormatChunk,
     #[error("Format chunk length: expected >= 8, got {0}")]
     InvalidFormatChunk(usize),
@@ -32,12 +36,30 @@ pub enum ParseError {
     Other(String),
 }
 
+pub type ParseResult = Result<Markers, ParseError>;
+
 /// The result of parsing a WAV file
 #[derive(Debug, Default, Serialize)]
-pub struct ParseResult {
+pub struct Markers {
     pub path: String,
+    pub sample_rate: u32,
     pub markers: Vec<Marker>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<Reason>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason_text: Option<String>,
+}
+
+impl Markers {
+    pub fn set_reason(&mut self, reason: Reason) {
+        self.reason = Some(reason);
+        self.reason_text = reason.get_documentation().map(ToString::to_string);
+    }
+
+    pub fn clear_reason(&mut self) {
+        self.reason = None;
+        self.reason_text = None;
+    }
 }
 
 /// Type of the marker
@@ -61,15 +83,46 @@ pub struct Marker {
     /// Start position in samples
     pub start_sample: u32,
     /// End position in samples (None for simple markers)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub end_sample: Option<u32>,
-    /// Sample rate of the audio file
-    pub sample_rate: u32,
     /// DERIVED: Start time in seconds
+    #[serde(serialize_with = "serialize_f64")]
     pub start_sec: f64,
     /// DERIVED: End time in seconds (None for simple markers)
+    #[serde(
+        serialize_with = "serialize_opt_f64",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub end_sec: Option<f64>,
     /// DERIVED: Duration in seconds (None for simple markers)
+    #[serde(
+        serialize_with = "serialize_opt_f64",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub duration_sec: Option<f64>,
+}
+
+pub fn round3(value: f64) -> f64 {
+    (value * 1_000.0).round() / 1_000.0
+}
+
+// Custom serializer for f64
+fn serialize_f64<S>(value: &f64, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_f64(round3(*value))
+}
+
+// Custom serializer for Option<f64>
+fn serialize_opt_f64<S>(value: &Option<f64>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match value {
+        Some(value) => serializer.serialize_some(&round3(*value)),
+        None => serializer.serialize_none(),
+    }
 }
 
 impl Marker {
@@ -104,7 +157,6 @@ impl Marker {
             marker_type,
             start_sample,
             end_sample,
-            sample_rate,
             start_sec,
             end_sec,
             duration_sec,
@@ -159,17 +211,27 @@ impl Marker {
 }
 
 /// Parse all markers from a Reaper WAV file
-pub fn parse_markers_from_file(file_path: &str) -> Result<ParseResult, ParseError> {
+pub fn parse_markers_from_file(file_path: &str) -> Result<Markers, ParseError> {
     let file = std::fs::File::open(file_path)?;
-    let riff_file = RiffFile::read(file, file_path.to_string())?;
+    let riff_file = RiffFile::read(file, file_path.to_string()).map_err(|err| {
+        let string = err.to_string();
+        if string.contains("no RIFF tag found") {
+            return ParseError::NoRiffTag;
+        }
+        if string.contains("no WAVE tag found") {
+            return ParseError::NoWaveTag;
+        }
+        err.into()
+    })?;
 
     // Get sample rate from format chunk
     let sample_rate = get_sample_rate(&riff_file)?;
     debug!("Sample rate: {} Hz", sample_rate);
 
-    let mut result = ParseResult {
+    let mut result = Markers {
         path: file_path.to_string(),
-        ..ParseResult::default()
+        sample_rate,
+        ..Markers::default()
     };
 
     // Parse labels
@@ -179,14 +241,14 @@ pub fn parse_markers_from_file(file_path: &str) -> Result<ParseResult, ParseErro
     // Parse sampler loops
     let Some(sampler_data) = parse_sampler_data(&riff_file)? else {
         debug!("No sample loops found.");
-        result.reason = Some(Reason::NoSamplerData);
+        result.set_reason(Reason::NoSamplerData);
         return Ok(result);
     };
 
     // Parse cue points for start positions
     let Some(cue_points) = parse_cue_points(&riff_file)? else {
         debug!("No cue points found.");
-        result.reason = Some(Reason::NoCuePoints);
+        result.set_reason(Reason::NoCuePoints);
         return Ok(result);
     };
 

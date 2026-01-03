@@ -1,3 +1,31 @@
+//! # Reaper Regions Parser
+//!
+//! This library parses Reaper DAW region markers from WAV files.
+//! It extracts markers, regions, and their associated metadata from
+//! WAV files that contain Reaper's proprietary marker data structures.
+//!
+//! ## Key Features
+//! - Parses Reaper region markers and cues from WAV files
+//! - Supports both markers (single points) and regions (start/end ranges)
+//! - Handles sample loops and label associations
+//! - Provides human-readable and machine-readable output formats
+//!
+//! ## Supported WAV Chunks
+//! - `cue ` - Cue points with unique IDs and positions
+//! - `labl` - Labels associated with cue points
+//! - `smpl` - Sampler data including loop points
+//! - `LIST` - List chunks containing additional metadata
+//!
+//! ## Example
+//! ```no_run
+//! use reaper_regions::parse_markers_from_file;
+//!
+//! let markers = parse_markers_from_file("path/to/audio.wav").unwrap();
+//! for marker in markers.markers {
+//!     println!("{}: {}", marker.id, marker.name);
+//! }
+//! ```
+
 mod wavtag;
 
 use log::{debug, warn};
@@ -6,7 +34,10 @@ use std::{collections::HashMap, error::Error};
 use strum::EnumMessage;
 use wavtag::{ChunkType, RiffFile};
 
-/// Reason for missing or incomplete markers
+/// Reason for missing or incomplete markers in a WAV file.
+///
+/// These enum variants explain why marker parsing might yield incomplete results,
+/// helping users understand the limitations of the parsed data.
 #[derive(Debug, strum::EnumMessage, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Reason {
     /// No label chunks were found in the file
@@ -19,64 +50,96 @@ pub enum Reason {
     NoMarkersMatched,
 }
 
-/// Parsing error
+/// Error type for parsing operations.
+///
+/// This enum covers all possible errors that can occur during WAV file parsing,
+/// including I/O errors, malformed chunks, and missing required data.
 #[derive(Debug, wherror::Error)]
 #[error(debug)]
 pub enum ParseError {
+    /// I/O error when reading the file
     Io(#[from] std::io::Error),
+    /// File doesn't contain a WAVE tag
     #[error("no WAVE tag found")]
     NoWaveTag,
+    /// File doesn't contain a RIFF tag
     #[error("no RIFF tag found")]
     NoRiffTag,
+    /// Format chunk is missing
     MissingFormatChunk,
+    /// Format chunk has invalid length
     #[error("Format chunk length: expected >= 8, got {0}")]
     InvalidFormatChunk(usize),
+    /// Failed to convert bytes to little-endian integer
     #[error("bytes to little endian at step: {0}")]
     BytesToLe(String),
+    /// Other parsing errors
     Other(String),
 }
 
+/// Result type for parsing operations.
 pub type ParseResult = Result<Markers, ParseError>;
 
-/// The result of parsing a WAV file
+/// The complete result of parsing a WAV file for markers.
+///
+/// Contains all parsed markers along with file metadata and any parsing warnings.
 #[derive(Debug, Default, Serialize)]
 pub struct Markers {
+    /// Path to the source WAV file
     pub path: String,
+    /// Sample rate in Hz
     pub sample_rate: u32,
+    /// Vector of parsed markers and regions
     pub markers: Vec<Marker>,
+    /// Reason for incomplete parsing, if any
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<Reason>,
+    /// Human-readable description of the parsing reason
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason_text: Option<String>,
 }
 
 impl Markers {
+    /// Sets a reason for incomplete parsing.
+    ///
+    /// # Arguments
+    /// * `reason` - The [`Reason`] variant describing why parsing was incomplete
+    ///
+    /// This also sets `reason_text` to the human-readable documentation from the enum.
     pub fn set_reason(&mut self, reason: Reason) {
         self.reason = Some(reason);
         self.reason_text = reason.get_documentation().map(ToString::to_string);
     }
 
+    /// Clears any previously set parsing reason.
+    ///
+    /// Used when markers are successfully parsed or when resetting the state.
     pub fn clear_reason(&mut self) {
         self.reason = None;
         self.reason_text = None;
     }
 }
 
-/// Type of the marker
+/// Type of marker in the WAV file.
+///
+/// Distinguishes between simple markers (single points) and regions (ranges).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MarkerType {
-    /// A simple marker (single point)
+    /// A simple marker representing a single point in time
     Marker,
-    /// A region with start and end
+    /// A region with both start and end points defining a range
     Region,
 }
 
-/// Represents a labeled marker or region in a Reaper WAV file
+/// Represents a labeled marker or region in a Reaper WAV file.
+///
+/// Contains all metadata for a single marker or region including timing information
+/// in both samples and seconds, and derived duration for regions.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Marker {
-    /// Unique identifier matching the cue point
+    /// Unique identifier matching the cue point in the WAV file
     pub id: u32,
-    /// Name (from 'labl' chunk)
+    /// Name of the marker (from 'labl' chunk)
     pub name: String,
     /// Type of marker (Marker or Region)
     pub r#type: MarkerType,
@@ -102,11 +165,27 @@ pub struct Marker {
     pub duration: Option<f64>,
 }
 
+/// Rounds a floating-point value to 3 decimal places.
+///
+/// # Arguments
+/// * `value` - The floating-point value to round
+///
+/// # Returns
+/// * `f64` - The rounded value
+///
+/// # Example
+/// ```
+/// use reaper_regions::round3;
+/// let value = 1.234567;
+/// assert_eq!(round3(value), 1.235);
+/// ```
 pub fn round3(value: f64) -> f64 {
     (value * 1_000.0).round() / 1_000.0
 }
 
-// Custom serializer for f64
+/// Custom serializer for f64 values.
+///
+/// Automatically rounds values to 3 decimal places during serialization.
 fn serialize_f64<S>(value: &f64, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
@@ -114,7 +193,9 @@ where
     serializer.serialize_f64(round3(*value))
 }
 
-// Custom serializer for Option<f64>
+/// Custom serializer for optional f64 values.
+///
+/// Automatically rounds values to 3 decimal places during serialization.
 fn serialize_opt_f64<S>(value: &Option<f64>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
@@ -126,7 +207,32 @@ where
 }
 
 impl Marker {
-    /// Create a new marker or region
+    /// Creates a new marker or region.
+    ///
+    /// # Arguments
+    /// * `id` - Unique identifier for the marker
+    /// * `name` - Name/label of the marker
+    /// * `start` - Start position in samples
+    /// * `end` - End position in samples (None for markers, Some for regions)
+    /// * `sample_rate` - Sample rate of the audio file in Hz
+    ///
+    /// # Returns
+    /// * [`Marker`] - A new Marker instance with derived timing information
+    ///
+    /// # Example
+    /// ```
+    /// use reaper_regions::{Marker, MarkerType};
+    ///
+    /// // Create a marker
+    /// let marker = Marker::new(1, "Verse".to_string(), 44100, None, 44100);
+    /// assert_eq!(marker.r#type, MarkerType::Marker);
+    /// assert_eq!(marker.start_time, 1.0);
+    ///
+    /// // Create a region
+    /// let region = Marker::new(2, "Chorus".to_string(), 44100, Some(88200), 44100);
+    /// assert_eq!(region.r#type, MarkerType::Region);
+    /// assert_eq!(region.duration, Some(1.0));
+    /// ```
     pub fn new(id: u32, name: String, start: u32, end: Option<u32>, sample_rate: u32) -> Self {
         let marker_type = if end.is_some() {
             MarkerType::Region
@@ -157,7 +263,19 @@ impl Marker {
         }
     }
 
-    /// Format marker as a string
+    /// Formats the marker as a human-readable string.
+    ///
+    /// # Returns
+    /// * `String` - Formatted description of the marker
+    ///
+    /// # Example
+    /// ```
+    /// use reaper_regions::Marker;
+    ///
+    /// let marker = Marker::new(1, "Intro".to_string(), 0, None, 44100);
+    /// println!("{}", marker.format());
+    /// // Output: "Marker (ID: 1): 'Intro'\n  Position: 0.000s (0 samples)"
+    /// ```
     pub fn format(&self) -> String {
         match self.r#type {
             MarkerType::Region => {
@@ -183,7 +301,34 @@ impl Marker {
     }
 }
 
-/// Parse all markers from a Reaper WAV file
+/// Parses all markers from a Reaper WAV file.
+///
+/// # Arguments
+/// * `file_path` - Path to the WAV file to parse
+///
+/// # Returns
+/// * [`ParseResult`] - Result containing parsed markers or an error
+///
+/// # Errors
+/// * [`ParseError::Io`] - If the file cannot be read
+/// * [`ParseError::NoRiffTag`] - If the file is not a valid RIFF file
+/// * [`ParseError::NoWaveTag`] - If the file is not a valid WAV file
+/// * [`ParseError::MissingFormatChunk`] - If the format chunk is missing
+/// * [`ParseError::InvalidFormatChunk`] - If the format chunk is malformed
+///
+/// # Example
+/// ```
+/// use reaper_regions::parse_markers_from_file;
+///
+/// match parse_markers_from_file("audio.wav") {
+///     Ok(markers) => {
+///         println!("Found {} markers", markers.markers.len());
+///     }
+///     Err(e) => {
+///         eprintln!("Failed to parse markers: {}", e);
+///     }
+/// }
+/// ```
 pub fn parse_markers_from_file(file_path: &str) -> Result<Markers, ParseError> {
     let file = std::fs::File::open(file_path)?;
     let riff_file = RiffFile::read(file, file_path.to_string()).map_err(|err| {
@@ -231,14 +376,25 @@ pub fn parse_markers_from_file(file_path: &str) -> Result<Markers, ParseError> {
     Ok(result)
 }
 
-/// Internal struct for label data
+/// Internal struct for label data.
 #[derive(Debug, Clone)]
 struct Label {
     cue_id: u32,
     name: String,
 }
 
-/// Parse sample rate from format chunk
+/// Parses the sample rate from the format chunk.
+///
+/// # Arguments
+/// * `riff_file` - Reference to the parsed RIFF file
+///
+/// # Returns
+/// * `Result<u32, ParseError>` - Sample rate in Hz or an error
+///
+/// # Errors
+/// * [`ParseError::MissingFormatChunk`] - If format chunk is not found
+/// * [`ParseError::InvalidFormatChunk`] - If format chunk is too short (< 8 bytes)
+/// * [`ParseError::BytesToLe`] - If bytes cannot be converted to little-endian
 fn get_sample_rate(riff_file: &RiffFile) -> Result<u32, ParseError> {
     let format_chunk = riff_file
         .find_chunk_by_type(ChunkType::Format)
@@ -261,7 +417,17 @@ fn get_sample_rate(riff_file: &RiffFile) -> Result<u32, ParseError> {
     Ok(sample_rate)
 }
 
-/// Parse all labels from the file (standalone or LIST chunks)
+/// Parses all labels from the file (standalone or LIST chunks).
+///
+/// # Arguments
+/// * `riff_file` - Reference to the parsed RIFF file
+///
+/// # Returns
+/// * `Vec<Label>` - Vector of parsed labels
+///
+/// # Note
+/// This function first looks for standalone 'labl' chunks, then falls back
+/// to parsing labels from LIST-adtl chunks if no standalone labels are found.
 fn parse_labels(riff_file: &RiffFile) -> Vec<Label> {
     let mut labels = Vec::new();
     let mut found_standalone_labels = false;
@@ -314,7 +480,16 @@ fn parse_labels(riff_file: &RiffFile) -> Vec<Label> {
     labels
 }
 
-/// Parse sampler chunk data
+/// Parses sampler chunk data to extract sample loops.
+///
+/// # Arguments
+/// * `riff_file` - Reference to the parsed RIFF file
+///
+/// # Returns
+/// * `Result<Option<Vec<wavtag::SampleLoop>>, ParseError>` - Sample loops or None if not found
+///
+/// # Errors
+/// * [`ParseError::BytesToLe`] - If sampler chunk data cannot be parsed
 fn parse_sampler_data(riff_file: &RiffFile) -> Result<Option<Vec<wavtag::SampleLoop>>, ParseError> {
     if let Some(smpl_chunk) = riff_file.find_chunk_by_type(ChunkType::Sampler) {
         let sampler_data = wavtag::SamplerChunk::from_chunk(smpl_chunk)?;
@@ -326,7 +501,17 @@ fn parse_sampler_data(riff_file: &RiffFile) -> Result<Option<Vec<wavtag::SampleL
     }
 }
 
-/// Parse 'labl' subchunks from a LIST-adtl chunk
+/// Parses 'labl' subchunks from a LIST-adtl chunk.
+///
+/// # Arguments
+/// * `list_chunk` - Reference to the LIST chunk to parse
+///
+/// # Returns
+/// * `Result<Vec<Label>, Box<dyn Error>>` - Vector of labels or an error
+///
+/// # Note
+/// LIST-adtl chunks can contain multiple label subchunks. This function
+/// iterates through the LIST chunk data to extract all 'labl' subchunks.
 fn parse_list_chunk_for_labels(
     list_chunk: &wavtag::RiffChunk,
 ) -> Result<Vec<Label>, Box<dyn Error>> {
@@ -375,7 +560,23 @@ fn parse_list_chunk_for_labels(
     Ok(labels)
 }
 
-/// Match labels with sampler loops to create regions
+/// Matches labels with sampler loops to create complete markers/regions.
+///
+/// # Arguments
+/// * `labels` - Vector of parsed labels with cue IDs and names
+/// * `sampler_loops` - Vector of sampler loops containing end positions
+/// * `cue_points` - HashMap of cue IDs to start positions (from 'cue ' chunk)
+/// * `sample_rate` - Sample rate of the audio file
+///
+/// # Returns
+/// * `Vec<Marker>` - Vector of complete markers/regions
+///
+/// # Algorithm
+/// 1. Creates a label map from cue ID to name
+/// 2. Creates a sampler map from cue ID to end position
+/// 3. For each label, looks up its start position and end position (if any)
+/// 4. Creates markers (no end) or regions (with end)
+/// 5. Sorts markers by start time
 fn match_markers(
     labels: Vec<Label>,
     sampler_loops: Vec<wavtag::SampleLoop>,
@@ -407,7 +608,25 @@ fn match_markers(
     markers
 }
 
-/// Parse 'cue ' chunk to get cue point positions (start samples)
+/// Parses 'cue ' chunk to get cue point positions (start samples).
+///
+/// # Arguments
+/// * `riff_file` - Reference to the parsed RIFF file
+///
+/// # Returns
+/// * `Result<Option<HashMap<u32, u32>>, ParseError>` - Map of cue IDs to start positions, or None if not found
+///
+/// # Errors
+/// * [`ParseError::BytesToLe`] - If cue chunk data cannot be parsed
+///
+/// # Note
+/// Each cue point record is 24 bytes with the following structure:
+/// - dwIdentifier (4 bytes): Cue ID
+/// - dwPosition (4 bytes): Position
+/// - fccChunk (4 bytes): Chunk type
+/// - dwChunkStart (4 bytes): Chunk start
+/// - dwBlockStart (4 bytes): Block start
+/// - dwSampleOffset (4 bytes): Sample offset (used as start position)
 fn parse_cue_points(riff_file: &RiffFile) -> Result<Option<HashMap<u32, u32>>, ParseError> {
     let mut cue_map = HashMap::new();
 

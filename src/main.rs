@@ -1,3 +1,24 @@
+//! # Reaper Regions CLI
+//!
+//! Command-line interface for extracting Reaper region markers from WAV files.
+//! This tool parses WAV files created with Reaper DAW and outputs markers
+//! and regions in various formats.
+//!
+//! ## Usage
+//! ```bash
+//! reaper-regions audio.wav
+//! reaper-regions audio.wav --format json
+//! reaper-regions audio.wav --format csv --no-header
+//! reaper-regions audio.wav --debug
+//! ```
+//!
+//! ## Output Formats
+//! - Human-readable (default): Easy to read in terminal
+//! - JSON: Machine-readable for scripting
+//! - CSV: For spreadsheets
+//! - TSV: Tab-separated for data processing
+//! - PSV: Pipe-separated for Unix pipelines
+
 use clap::{Parser, ValueEnum};
 use env_logger::Builder;
 use log::error;
@@ -6,40 +27,90 @@ use serde_json;
 use std::io;
 use strum::EnumMessage;
 
-/// Extract Reaper region markers from WAV files
+/// Command-line interface arguments for the Reaper Regions parser.
+///
+/// This struct defines all command-line options using the Clap derive macro.
+/// It supports file input, output format selection, debug logging, and
+/// header control for delimited outputs.
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
-    /// Input WAV file
+    /// Path to the input WAV file containing Reaper markers.
+    ///
+    /// The file must be a valid WAV file with RIFF structure and
+    /// may contain Reaper-specific chunks for markers and regions.
     file: String,
 
-    /// Output format
+    /// Output format for displaying parsed markers.
+    ///
+    /// Choose from human-readable, JSON, or various delimited formats.
     #[arg(short, long, value_enum, default_value_t = OutputFormat::Human)]
     format: OutputFormat,
 
-    /// Enable debug logging
+    /// Enable debug logging for troubleshooting parsing issues.
+    ///
+    /// When enabled, shows detailed information about chunk parsing,
+    /// label matching, and any warnings encountered.
     #[arg(short, long)]
     debug: bool,
 
-    /// Omit header row in CSV/TSV/PSV output
+    /// Omit header row in CSV/TSV/PSV output formats.
+    ///
+    /// Useful when piping output to other tools that don't expect headers.
     #[arg(short, long)]
     no_header: bool,
 }
 
+/// Supported output formats for marker data.
+///
+/// Each format is optimized for different use cases:
+/// - Human: Terminal viewing and manual inspection
+/// - JSON: Programmatic consumption and data exchange
+/// - CSV/TSV/PSV: Spreadsheets and data processing pipelines
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 enum OutputFormat {
     /// JSON format (machine-readable)
+    ///
+    /// Outputs complete marker data as a JSON object with
+    /// file metadata, sample rate, and array of markers.
     Json,
-    /// Comma-separated values
+    /// Comma-separated values (CSV)
+    ///
+    /// Tabular format compatible with spreadsheets and databases.
+    /// Fields are comma-separated and quoted as needed.
     Csv,
-    /// Tab-separated values
+    /// Tab-separated values (TSV)
+    ///
+    /// Tabular format with tabs as separators, useful for
+    /// Unix tools that expect tab-separated data.
     Tsv,
-    /// Pipe-separated values
+    /// Pipe-separated values (PSV)
+    ///
+    /// Tabular format with pipes as separators, often used
+    /// in Unix pipelines where commas or tabs might appear in data.
     Psv,
     /// Human-readable format
+    ///
+    /// Formatted for easy reading in terminal output with
+    /// clear labels, indentation, and grouping.
     Human,
 }
 
+/// Main entry point for the Reaper Regions CLI.
+///
+/// This function:
+/// 1. Parses command-line arguments
+/// 2. Configures logging based on debug flag
+/// 3. Calls the parser to extract markers from the WAV file
+/// 4. Routes output to the appropriate format handler
+///
+/// # Exit Codes
+/// - 0: Success
+/// - 1: Parsing error or invalid file
+///
+/// # Panics
+/// May panic if logging cannot be initialized or if output
+/// formatting fails (though errors are typically handled gracefully).
 fn main() {
     let cli = Cli::parse();
 
@@ -69,7 +140,29 @@ fn main() {
     }
 }
 
-/// JSON output (machine-readable)
+/// Outputs parsed markers in JSON format.
+///
+/// # Arguments
+/// * `result` - The parsing result containing markers or an error
+///
+/// # Output
+/// Prints JSON to stdout with the following structure:
+/// ```json
+/// {
+///   "path": "audio.wav",
+///   "sample_rate": 44100,
+///   "markers": [...],
+///   "reason": "NoLabels",
+///   "reason_text": "No label chunks were found in the file"
+/// }
+/// ```
+///
+/// If parsing fails, outputs an error object:
+/// ```json
+/// {
+///   "error": "Error message here"
+/// }
+/// ```
 fn output_json(result: &ParseResult) {
     let value = match result {
         Ok(result) => serde_json::to_value(result).unwrap(),
@@ -81,7 +174,27 @@ fn output_json(result: &ParseResult) {
     println!("{output}");
 }
 
-/// Delimited output (CSV, TSV, PSV)
+/// Outputs parsed markers in delimited format (CSV, TSV, PSV).
+///
+/// # Arguments
+/// * `result` - The parsing result containing markers
+/// * `delimiter` - Character to use as field delimiter
+/// * `include_header` - Whether to include a header row
+///
+/// # Fields
+/// The output includes these columns:
+/// - type: "marker" or "region"
+/// - id: Unique marker ID
+/// - name: Marker label
+/// - start: Start position in samples
+/// - end: End position in samples (empty for markers)
+/// - start_time: Start time in seconds (rounded to 3 decimals)
+/// - end_time: End time in seconds (empty for markers)
+/// - duration: Duration in seconds (empty for markers)
+/// - sample_rate: File sample rate in Hz
+///
+/// # Panics
+/// Will panic if CSV writing fails, though this is rare for stdout.
 fn output_delimited(result: &ParseResult, delimiter: char, include_header: bool) {
     let result = match result {
         Ok(result) => result,
@@ -135,7 +248,33 @@ fn output_delimited(result: &ParseResult, delimiter: char, include_header: bool)
     let _ = wtr.flush();
 }
 
-/// Human-readable output
+/// Outputs parsed markers in human-readable format.
+///
+/// # Arguments
+/// * `result` - The parsing result containing markers
+///
+/// # Output
+/// Prints formatted output with:
+/// - File path
+/// - Sample rate
+/// - Marker count
+/// - Parsing reason (if any)
+/// - Detailed list of markers and regions with timing information
+///
+/// Example output:
+/// ```
+/// File: audio.wav
+/// Sample rate: 44100 Hz
+/// Total markers: 3
+///
+/// Region (ID: 1): 'Verse'
+///   Start: 0.000s (0 samples)
+///   End: 4.410s (44100 samples)
+///   Duration: 4.410s
+///
+/// Marker (ID: 2): 'Chorus Start'
+///   Position: 4.410s (44100 samples)
+/// ```
 fn output_human(result: &ParseResult) {
     let result = match result {
         Ok(result) => result,

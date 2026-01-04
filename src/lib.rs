@@ -26,7 +26,7 @@
 //! }
 //! ```
 
-mod wavtag;
+pub mod wavtag;
 
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
@@ -78,13 +78,13 @@ pub enum ParseError {
 }
 
 /// Result type for parsing operations.
-pub type ParseResult = Result<Markers, ParseError>;
+pub type ParseResult = Result<WavData, ParseError>;
 
 /// The complete result of parsing a WAV file for markers.
 ///
 /// Contains all parsed markers along with file metadata and any parsing warnings.
 #[derive(Debug, Default, Serialize)]
-pub struct Markers {
+pub struct WavData {
     /// Path to the source WAV file
     pub path: String,
     /// Sample rate in Hz
@@ -99,7 +99,7 @@ pub struct Markers {
     pub reason_text: Option<String>,
 }
 
-impl Markers {
+impl WavData {
     /// Sets a reason for incomplete parsing.
     ///
     /// # Arguments
@@ -329,7 +329,7 @@ impl Marker {
 ///     }
 /// }
 /// ```
-pub fn parse_markers_from_file(file_path: &str) -> Result<Markers, ParseError> {
+pub fn parse_markers_from_file(file_path: &str) -> Result<WavData, ParseError> {
     let file = std::fs::File::open(file_path)?;
     let riff_file = RiffFile::read(file, file_path.to_string()).map_err(|err| {
         let string = err.to_string();
@@ -346,10 +346,10 @@ pub fn parse_markers_from_file(file_path: &str) -> Result<Markers, ParseError> {
     let sample_rate = get_sample_rate(&riff_file)?;
     debug!("Sample rate: {} Hz", sample_rate);
 
-    let mut result = Markers {
+    let mut result = WavData {
         path: file_path.to_string(),
         sample_rate,
-        ..Markers::default()
+        ..WavData::default()
     };
 
     // Parse labels
@@ -357,11 +357,11 @@ pub fn parse_markers_from_file(file_path: &str) -> Result<Markers, ParseError> {
     debug!("Found {} label(s)", labels.len());
 
     // Parse sampler loops
-    let Some(sampler_data) = parse_sampler_data(&riff_file)? else {
+    let sampler_data = parse_sampler_data(&riff_file)?;
+    if sampler_data.is_none() {
         debug!("No sample loops found.");
         result.set_reason(Reason::NoSamplerData);
-        return Ok(result);
-    };
+    }
 
     // Parse cue points for start positions
     let Some(cue_points) = parse_cue_points(&riff_file)? else {
@@ -579,7 +579,7 @@ fn parse_list_chunk_for_labels(
 /// 5. Sorts markers by start time
 fn match_markers(
     labels: Vec<Label>,
-    sampler_loops: Vec<wavtag::SampleLoop>,
+    sampler_loops: Option<Vec<wavtag::SampleLoop>>,
     cue_points: HashMap<u32, u32>, // NEW: Start positions from 'cue ' chunk
     sample_rate: u32,
 ) -> Vec<Marker> {
@@ -589,6 +589,7 @@ fn match_markers(
         .collect();
 
     let sampler_map: HashMap<u32, u32> = sampler_loops
+        .unwrap_or_default()
         .into_iter()
         .map(|sl| (sl.id, sl.end))
         .collect();

@@ -1,0 +1,5 @@
+File: tests/fixtures/no-markers-or-regions_stripped.wav
+Sample rate: 48000 Hz
+Total markers: 0
+Reason: NoCuePoints: Labels and/or sampler data found but no 'cue ' chunk
+

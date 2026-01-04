@@ -1,0 +1,7 @@
+type|id|name|start|end|start_time|end_time|duration|sample_rate
+region|1|Region 1|290708|886374|6.056|18.466|12.410|48000
+marker|2|Marker 1|383050||7.980|||48000
+region|3|Region 2|1060229|1496290|22.088|31.173|9.085|48000
+marker|4|Marker 2|1597183||33.275|||48000
+region|5|Region 3|2282911|2756024|47.561|57.417|9.857|48000
+marker|6|Marker 3|2372404||49.425|||48000

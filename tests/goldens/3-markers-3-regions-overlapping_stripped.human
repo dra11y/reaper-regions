@@ -1,0 +1,28 @@
+File: tests/fixtures/3-markers-3-regions-overlapping_stripped.wav
+Sample rate: 48000 Hz
+Total markers: 6
+
+Region (ID: 1): 'Region 1'
+  Start: 6.056s (290708 samples)
+  End: 18.466s (886374 samples)
+  Duration: 12.410s (12.409708333333334 samples)
+
+Marker (ID: 2): 'Marker 1'
+  Position: 7.980s (383050 samples)
+
+Region (ID: 3): 'Region 2'
+  Start: 22.088s (1060229 samples)
+  End: 31.173s (1496290 samples)
+  Duration: 9.085s (9.084604166666665 samples)
+
+Marker (ID: 4): 'Marker 2'
+  Position: 33.275s (1597183 samples)
+
+Region (ID: 5): 'Region 3'
+  Start: 47.561s (2282911 samples)
+  End: 57.417s (2756024 samples)
+  Duration: 9.857s (9.856520833333335 samples)
+
+Marker (ID: 6): 'Marker 3'
+  Position: 49.425s (2372404 samples)
+

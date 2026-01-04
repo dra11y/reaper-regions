@@ -1,0 +1,57 @@
+{
+  "markers": [
+    {
+      "duration": 12.41,
+      "end": 886374,
+      "end_time": 18.466,
+      "id": 1,
+      "name": "Region 1",
+      "start": 290708,
+      "start_time": 6.056,
+      "type": "Region"
+    },
+    {
+      "id": 2,
+      "name": "Marker 1",
+      "start": 383050,
+      "start_time": 7.98,
+      "type": "Marker"
+    },
+    {
+      "duration": 9.085,
+      "end": 1496290,
+      "end_time": 31.173,
+      "id": 3,
+      "name": "Region 2",
+      "start": 1060229,
+      "start_time": 22.088,
+      "type": "Region"
+    },
+    {
+      "id": 4,
+      "name": "Marker 2",
+      "start": 1597183,
+      "start_time": 33.275,
+      "type": "Marker"
+    },
+    {
+      "duration": 9.857,
+      "end": 2756024,
+      "end_time": 57.417,
+      "id": 5,
+      "name": "Region 3",
+      "start": 2282911,
+      "start_time": 47.561,
+      "type": "Region"
+    },
+    {
+      "id": 6,
+      "name": "Marker 3",
+      "start": 2372404,
+      "start_time": 49.425,
+      "type": "Marker"
+    }
+  ],
+  "path": "tests/fixtures/3-markers-3-regions-overlapping_stripped.wav",
+  "sample_rate": 48000
+}

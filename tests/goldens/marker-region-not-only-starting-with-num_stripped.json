@@ -1,0 +1,40 @@
+{
+  "markers": [
+    {
+      "duration": 107.092,
+      "end": 10211344,
+      "end_time": 212.736,
+      "id": 1,
+      "name": "Region One",
+      "start": 5070939,
+      "start_time": 105.645,
+      "type": "Region"
+    },
+    {
+      "id": 2,
+      "name": "marker one",
+      "start": 6256700,
+      "start_time": 130.348,
+      "type": "Marker"
+    },
+    {
+      "id": 3,
+      "name": "#2 marker",
+      "start": 7640362,
+      "start_time": 159.174,
+      "type": "Marker"
+    },
+    {
+      "duration": 43.074,
+      "end": 12945993,
+      "end_time": 269.708,
+      "id": 4,
+      "name": "#2 region",
+      "start": 10878451,
+      "start_time": 226.634,
+      "type": "Region"
+    }
+  ],
+  "path": "tests/fixtures/marker-region-not-only-starting-with-num_stripped.wav",
+  "sample_rate": 48000
+}

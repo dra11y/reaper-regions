@@ -1,0 +1,7 @@
+{
+  "markers": [],
+  "path": "tests/fixtures/no-markers-or-regions_stripped.wav",
+  "reason": "NoCuePoints",
+  "reason_text": "Labels and/or sampler data found but no 'cue ' chunk",
+  "sample_rate": 48000
+}

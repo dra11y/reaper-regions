@@ -1,0 +1,23 @@
+{
+  "markers": [
+    {
+      "id": 1,
+      "name": "#2 marker",
+      "start": 7640362,
+      "start_time": 159.174,
+      "type": "Marker"
+    },
+    {
+      "duration": 43.074,
+      "end": 12945993,
+      "end_time": 269.708,
+      "id": 2,
+      "name": "#2 region",
+      "start": 10878451,
+      "start_time": 226.634,
+      "type": "Region"
+    }
+  ],
+  "path": "tests/fixtures/marker-region-starting-with-num_stripped.wav",
+  "sample_rate": 48000
+}

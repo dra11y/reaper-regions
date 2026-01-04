@@ -1,0 +1,3 @@
+type	id	name	start	end	start_time	end_time	duration	sample_rate
+marker	1	#2 marker	7640362		159.174			48000
+region	2	#2 region	10878451	12945993	226.634	269.708	43.074	48000

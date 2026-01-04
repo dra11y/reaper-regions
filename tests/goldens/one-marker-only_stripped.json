@@ -1,0 +1,15 @@
+{
+  "markers": [
+    {
+      "id": 1,
+      "name": "One Marker Only",
+      "start": 12323078,
+      "start_time": 256.731,
+      "type": "Marker"
+    }
+  ],
+  "path": "tests/fixtures/one-marker-only_stripped.wav",
+  "reason": "NoSamplerData",
+  "reason_text": "No 'smpl' (sampler) chunk was found in the file",
+  "sample_rate": 48000
+}

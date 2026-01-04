@@ -4,13 +4,26 @@ version = "0.1.0"
 description = "Read REAPER markers and regions from WAV files"
 edition = "2024"
 
+[workspace]
+members = ["tools/strip"]
+
+[features]
+default = ["cli"]
+cli = ["dep:clap", "dep:csv", "dep:env_logger", "dep:serde_json"]
+
 [dependencies]
 byteorder = "1.5"
-clap = { version = "4", features = ["derive"] }
-csv = "1"
-env_logger = "0.11"
 log = "0.4"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-strum = { version = "0.27.2", features = ["derive"] }
-wherror = "2"
+serde = { version = "1.0", features = ["derive"] }
+strum = { version = "0.27", features = ["derive"] }
+wherror = "2.3"
+
+# CLI
+clap = { optional = true, version = "4.5", features = ["derive"] }
+csv = { optional = true, version = "1.4" }
+env_logger = { optional = true, version = "0.11.8" }
+serde_json = { optional = true, version = "1.0" }
+
+[dev-dependencies]
+assert_cmd = "2.1.1"
+predicates = "3.1.3"

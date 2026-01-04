@@ -1,0 +1,23 @@
+{
+  "markers": [
+    {
+      "duration": 107.092,
+      "end": 10211344,
+      "end_time": 212.736,
+      "id": 1,
+      "name": "Region One",
+      "start": 5070939,
+      "start_time": 105.645,
+      "type": "Region"
+    },
+    {
+      "id": 2,
+      "name": "marker one",
+      "start": 6256700,
+      "start_time": 130.348,
+      "type": "Marker"
+    }
+  ],
+  "path": "tests/fixtures/marker-region_stripped.wav",
+  "sample_rate": 48000
+}

@@ -1,0 +1,8 @@
+File: tests/fixtures/one-marker-only_stripped.wav
+Sample rate: 48000 Hz
+Total markers: 1
+Reason: NoSamplerData: No 'smpl' (sampler) chunk was found in the file
+
+Marker (ID: 1): 'One Marker Only'
+  Position: 256.731s (12323078 samples)
+

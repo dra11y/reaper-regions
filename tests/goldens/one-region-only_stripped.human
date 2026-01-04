@@ -1,0 +1,9 @@
+File: tests/fixtures/one-region-only_stripped.wav
+Sample rate: 48000 Hz
+Total markers: 1
+
+Region (ID: 1): 'Region One'
+  Start: 105.645s (5070939 samples)
+  End: 212.736s (10211344 samples)
+  Duration: 107.092s (107.09177083333333 samples)
+

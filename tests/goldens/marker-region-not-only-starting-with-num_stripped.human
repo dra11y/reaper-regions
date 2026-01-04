@@ -1,0 +1,20 @@
+File: tests/fixtures/marker-region-not-only-starting-with-num_stripped.wav
+Sample rate: 48000 Hz
+Total markers: 4
+
+Region (ID: 1): 'Region One'
+  Start: 105.645s (5070939 samples)
+  End: 212.736s (10211344 samples)
+  Duration: 107.092s (107.09177083333333 samples)
+
+Marker (ID: 2): 'marker one'
+  Position: 130.348s (6256700 samples)
+
+Marker (ID: 3): '#2 marker'
+  Position: 159.174s (7640362 samples)
+
+Region (ID: 4): '#2 region'
+  Start: 226.634s (10878451 samples)
+  End: 269.708s (12945993 samples)
+  Duration: 43.074s (43.073791666666665 samples)
+

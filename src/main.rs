@@ -14,10 +14,11 @@
 //!
 //! ## Output Formats
 //! - Human-readable (default): Easy to read in terminal
-//! - JSON: Machine-readable for scripting
-//! - CSV: For spreadsheets
-//! - TSV: Tab-separated for data processing
-//! - PSV: Pipe-separated for Unix pipelines
+//! - JSON: JavaScript Object Notation
+//! - Delimited, with or without headers, for piping into other programs.
+//!   - CSV: Comma-separated
+//!   - TSV: Tab-separated
+//!   - PSV: Pipe-separated
 
 use clap::{Parser, ValueEnum};
 use env_logger::Builder;

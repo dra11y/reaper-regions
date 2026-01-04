@@ -2,6 +2,15 @@
 @list:
     just --list
 
+# Re-generate README file
+readme:
+    @which cargo-readme || cargo binstall -y cargo-readme
+    cargo readme --no-title > README.md
+    echo >> README.md
+    echo '---' >> README.md
+    echo >> README.md
+    cargo readme --no-title -i src/main.rs >> README.md
+
 # Strip test WAV files in tests/wav (.gitignored) and output to tests/fixtures
 strip:
     cargo run -p strip -- tests/wav

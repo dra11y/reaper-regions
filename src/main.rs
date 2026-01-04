@@ -1,4 +1,4 @@
-//! # Reaper Regions CLI
+//! # REAPER Regions CLI
 //!
 //! Command-line interface for extracting Reaper region markers from WAV files.
 //! This tool parses WAV files created with Reaper DAW and outputs markers
@@ -19,6 +19,83 @@
 //!   - CSV: Comma-separated
 //!   - TSV: Tab-separated
 //!   - PSV: Pipe-separated
+//!
+//! ## Installation
+//! ```
+//! cargo install reaper-regions
+//! ```
+//!
+//! ## Example JSON output
+//!
+//! ```json
+//! {
+//!   "markers": [
+//!     {
+//!       "duration": 12.41,
+//!       "end": 886374,
+//!       "end_time": 18.466,
+//!       "id": 1,
+//!       "name": "Region 1",
+//!       "start": 290708,
+//!       "start_time": 6.056,
+//!       "type": "Region"
+//!     },
+//!     {
+//!       "id": 2,
+//!       "name": "Marker 1",
+//!       "start": 383050,
+//!       "start_time": 7.98,
+//!       "type": "Marker"
+//!     },
+//!     {
+//!       "duration": 9.085,
+//!       "end": 1496290,
+//!       "end_time": 31.173,
+//!       "id": 3,
+//!       "name": "Region 2",
+//!       "start": 1060229,
+//!       "start_time": 22.088,
+//!       "type": "Region"
+//!     }, ...
+//!   ],
+//!   "path": "tests/fixtures/3-markers-3-regions-overlapping_stripped.wav",
+//!   "sample_rate": 48000
+//! }
+//! ```
+//!
+//! ## Example PSV output
+//! ```
+//! type|id|name|start|end|start_time|end_time|duration|sample_rate
+//! region|1|Region 1|290708|886374|6.056|18.466|12.410|48000
+//! marker|2|Marker 1|383050||7.980|||48000
+//! region|3|Region 2|1060229|1496290|22.088|31.173|9.085|48000
+//! ```
+//!
+//! ## Example human output
+//! ```
+//! File: tests/fixtures/3-markers-3-regions-overlapping_stripped.wav
+//! Sample rate: 48000 Hz
+//! Total markers: 6
+//!
+//! Region (ID: 1): 'Region 1'
+//!   Start: 6.056s (290708 samples)
+//!   End: 18.466s (886374 samples)
+//!   Duration: 12.410s (12.409708333333334 samples)
+//!
+//! Marker (ID: 2): 'Marker 1'
+//!   Position: 7.980s (383050 samples)
+//!
+//! Region (ID: 3): 'Region 2'
+//!   Start: 22.088s (1060229 samples)
+//!   End: 31.173s (1496290 samples)
+//!   Duration: 9.085s (9.084604166666665 samples)
+//! ...
+//! ```
+//!
+//! ## Acknowledgements / License
+//!
+//! REAPER is a trademark and the copyright property of [Cockos, Incorporated](https://www.cockos.com/).
+//! This library is free, open source, and MIT-licensed.
 
 use clap::{Parser, ValueEnum};
 use env_logger::Builder;
@@ -273,21 +350,23 @@ fn output_delimited(result: &ParseResult, delimiter: char, include_header: bool)
 ///   Position: 4.410s (44100 samples)
 /// ```
 fn output_human(result: &ParseResult) {
-    let result = match result {
-        Ok(result) => result,
+    let data = match result {
+        Ok(data) => data,
         Err(error) => {
             error!("{error}");
             std::process::exit(1);
         }
     };
 
-    println!("File: {}", result.path);
+    println!("{data:#?}");
 
-    println!("Sample rate: {} Hz", result.sample_rate);
+    println!("File: {}", data.path);
 
-    println!("Total markers: {}", result.markers.len());
+    println!("Sample rate: {} Hz", data.sample_rate);
 
-    if let Some(reason) = result.reason {
+    println!("Total markers: {}", data.markers.len());
+
+    if let Some(reason) = data.reason {
         let reason = match reason.get_documentation() {
             Some(docs) => format!("{reason:?}: {docs}"),
             None => format!("{reason:?}"),
@@ -297,7 +376,7 @@ fn output_human(result: &ParseResult) {
 
     println!();
 
-    for marker in result.markers.iter() {
+    for marker in data.markers.iter() {
         match marker.end {
             Some(end_sample) => {
                 // This is a region

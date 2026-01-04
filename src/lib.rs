@@ -1,11 +1,16 @@
-//! # Reaper Regions Parser
+//! # REAPER Regions Library
 //!
-//! This library parses Reaper DAW region markers from WAV files.
+//! This library parses [REAPER DAW](https://www.reaper.fm/) region markers from WAV files.
 //! It extracts markers, regions, and their associated metadata from
-//! WAV files that contain Reaper's proprietary marker data structures.
+//! WAV files rendered from REAPER with markers or markers + regions included.
+//! These are stored in RIFF `'cue '`, `'labl'`, and `'smpl'` chunks by REAPER.
+//!
+//! This library **might** work with WAV files exported from other DAWs with markers/regions,
+//! but many of them do not support embedding markers or loop regions in exported WAV files.
+//! If you find another DAW whose exports this library can read, please let me know.
 //!
 //! ## Key Features
-//! - Parses Reaper region markers and cues from WAV files
+//! - Parses REAPER region markers and cues from WAV files
 //! - Supports both markers (single points) and regions (start/end ranges)
 //! - Handles sample loops and label associations
 //! - Provides human-readable and machine-readable output formats
@@ -20,11 +25,84 @@
 //! ```no_run
 //! use reaper_regions::parse_markers_from_file;
 //!
-//! let markers = parse_markers_from_file("path/to/audio.wav").unwrap();
-//! for marker in markers.markers {
-//!     println!("{}: {}", marker.id, marker.name);
+//! let data = parse_markers_from_file("path/to/audio.wav").unwrap();
+//! println!("{data:#?}");
+//! ```
+//!
+//! **Output:**
+//! ```
+//! WavData {
+//!     path: "tests/fixtures/3-markers-3-regions-overlapping_stripped.wav",
+//!     sample_rate: 48000,
+//!     markers: [
+//!         Marker {
+//!             id: 1,
+//!             name: "Region 1",
+//!             type: Region,
+//!             start: 290708,
+//!             end: Some(
+//!                 886374,
+//!             ),
+//!             start_time: 6.056416666666666,
+//!             end_time: Some(
+//!                 18.466125,
+//!             ),
+//!             duration: Some(
+//!                 12.409708333333334,
+//!             ),
+//!         },
+//!         Marker {
+//!             id: 2,
+//!             name: "Marker 1",
+//!             type: Marker,
+//!             start: 383050,
+//!             end: None,
+//!             start_time: 7.980208333333334,
+//!             end_time: None,
+//!             duration: None,
+//!         },
+//!         Marker {
+//!             id: 3,
+//!             name: "Region 2",
+//!             type: Region,
+//!             start: 1060229,
+//!             end: Some(
+//!                 1496290,
+//!             ),
+//!             start_time: 22.088104166666668,
+//!             end_time: Some(
+//!                 31.172708333333333,
+//!             ),
+//!             duration: Some(
+//!                 9.084604166666665,
+//!             ),
+//!         },
+//!         ...
+//!     ],
+//!     reason: None,
+//!     reason_text: None,
 //! }
 //! ```
+//!
+//! ## Installation
+//! ```
+//! cargo add reaper-regions --no-default-features
+//! ```
+//!
+//! ## Motivation
+//! I was motivated to create this tool because I needed to sync song regions from my
+//! master mixdown created in REAPER with my video projects in DaVinci Resolve
+//! for live concert video and audio productions.
+//! Unfortunately, Resolve does not read markers or regions embedded in WAV files.
+//! Also, the metadata exported by REAPER, as inspected with `ffprobe`, reports
+//! incorrect end times for regions (possibly due to metadata spec limitations?),
+//! necessitating this tool.
+//!
+//! ## Acknowledgements / License
+//!
+//! REAPER is a trademark and the copyright property of [Cockos, Incorporated](https://www.cockos.com/).
+//! This library is free, open source, and MIT-licensed.
+//! DaVinci Resolve is a trademark and the copyright property of [Blackmagic Design Pty. Ltd.](https://www.blackmagicdesign.com/)
 
 pub mod wavtag;
 

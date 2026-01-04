@@ -93,7 +93,7 @@
 //!
 //! ## Motivation
 //! I was motivated to create this tool because I needed to sync song regions from my
-//! master mixdown created in REAPER with my video projects in DaVinci Resolve
+//! master mixdown created in REAPER with my video projects in [DaVinci Resolve](https://www.blackmagicdesign.com/products/davinciresolve)
 //! for live concert video and audio productions.
 //! Unfortunately, Resolve does not read markers or regions embedded in WAV files.
 //! Also, the metadata exported by REAPER, as inspected with `ffprobe`, reports

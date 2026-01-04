@@ -99,7 +99,7 @@
 
 use clap::{Parser, ValueEnum};
 use env_logger::Builder;
-use log::error;
+use log::{debug, error};
 use reaper_regions::{ParseResult, parse_markers_from_file, round3};
 use serde_json;
 use std::io;
@@ -358,7 +358,7 @@ fn output_human(result: &ParseResult) {
         }
     };
 
-    println!("{data:#?}");
+    debug!("{data:#?}");
 
     println!("File: {}", data.path);
 

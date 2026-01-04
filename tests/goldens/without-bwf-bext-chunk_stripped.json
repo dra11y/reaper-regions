@@ -1,0 +1,33 @@
+{
+  "markers": [
+    {
+      "duration": 30.965,
+      "end": 2214314,
+      "end_time": 46.132,
+      "id": 1,
+      "name": "Region One",
+      "start": 727994,
+      "start_time": 15.167,
+      "type": "Region"
+    },
+    {
+      "id": 2,
+      "name": "Marker One",
+      "start": 1597541,
+      "start_time": 33.282,
+      "type": "Marker"
+    },
+    {
+      "duration": 29.912,
+      "end": 4347739,
+      "end_time": 90.578,
+      "id": 3,
+      "name": "Another Region",
+      "start": 2911974,
+      "start_time": 60.666,
+      "type": "Region"
+    }
+  ],
+  "path": "tests/fixtures/without-bwf-bext-chunk_stripped.wav",
+  "sample_rate": 48000
+}

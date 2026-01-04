@@ -1,0 +1,17 @@
+File: tests/fixtures/without-bwf-bext-chunk_stripped.wav
+Sample rate: 48000 Hz
+Total markers: 3
+
+Region (ID: 1): 'Region One'
+  Start: 15.167s (727994 samples)
+  End: 46.132s (2214314 samples)
+  Duration: 30.965s (30.964999999999996 samples)
+
+Marker (ID: 2): 'Marker One'
+  Position: 33.282s (1597541 samples)
+
+Region (ID: 3): 'Another Region'
+  Start: 60.666s (2911974 samples)
+  End: 90.578s (4347739 samples)
+  Duration: 29.912s (29.91177083333333 samples)
+

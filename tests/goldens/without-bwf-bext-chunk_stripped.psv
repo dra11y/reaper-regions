@@ -1,0 +1,4 @@
+type|id|name|start|end|start_time|end_time|duration|sample_rate
+region|1|Region One|727994|2214314|15.167|46.132|30.965|48000
+marker|2|Marker One|1597541||33.282|||48000
+region|3|Another Region|2911974|4347739|60.666|90.578|29.912|48000

@@ -1,13 +1,20 @@
+# Reaper Regions
+## Read REAPER DAW markers and regions in rendered/exported WAV files
 This crate includes both a [library](#reaper-regions-library) and a [CLI](#reaper-regions-cli). The CLI dependencies can be excluded with `default-features = false`.
 
 ## REAPER Regions Library
-
-### Parse REAPER markers and regions from WAV files
 
 This library parses [REAPER DAW](https://www.reaper.fm/) region markers from WAV files.
 It extracts markers, regions, and their associated metadata from
 WAV files rendered from REAPER with markers or markers + regions included.
 These are stored in RIFF `'cue '`, `'labl'`, and `'smpl'` chunks by REAPER.
+In order for this to work properly, two conditions must be met:
+
+1. The project **must** have at least one marker or region defined in the track view:
+<img alt="Track showing a marker and two regions" src="images/track.png" width="511">
+
+2. 2. The WAV file **must** be rendered with Regions or Regions + Markers, and there must be at least one marker or region in the time range of the rendered output:
+<img alt="Render with markers or markers + regions" src="images/render.png" width="610">
 
 This library **might** work with WAV files exported from other DAWs with markers/regions,
 but many of them do not support embedding markers or loop regions in exported WAV files.
@@ -107,6 +114,8 @@ necessitating this tool.
 REAPER is a trademark and the copyright property of [Cockos, Incorporated](https://www.cockos.com/).
 This library is free, open source, and MIT-licensed.
 DaVinci Resolve is a trademark and the copyright property of [Blackmagic Design Pty. Ltd.](https://www.blackmagicdesign.com/)
+
+License: MIT
 
 ---
 
@@ -208,3 +217,5 @@ Region (ID: 3): 'Region 2'
 
 REAPER is a trademark and the copyright property of [Cockos, Incorporated](https://www.cockos.com/).
 This library is free, open source, and MIT-licensed.
+
+License: MIT

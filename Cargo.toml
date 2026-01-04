@@ -4,6 +4,8 @@ version = "0.1.0"
 authors = ["Tom Grushka <tom@dra11y.com>"]
 license = "MIT"
 description = "Read REAPER markers and regions from WAV files"
+homepage = "https://github.com/dra11y/reaper-regions"
+repository = "https://github.com/dra11y/reaper-regions"
 edition = "2024"
 
 [workspace]

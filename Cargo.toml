@@ -1,6 +1,6 @@
 [package]
 name = "reaper-regions"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Tom Grushka <tom@dra11y.com>"]
 license = "MIT"
 description = "Read REAPER DAW markers and regions in rendered/exported WAV files"

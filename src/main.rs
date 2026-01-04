@@ -21,7 +21,7 @@
 //!   - PSV: Pipe-separated
 //!
 //! ## Installation
-//! ```
+//! ```bash
 //! cargo install reaper-regions
 //! ```
 //!

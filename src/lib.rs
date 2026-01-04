@@ -1,5 +1,7 @@
 //! # REAPER Regions Library
 //!
+//! ## Parse REAPER markers and regions from WAV files
+//!
 //! This library parses [REAPER DAW](https://www.reaper.fm/) region markers from WAV files.
 //! It extracts markers, regions, and their associated metadata from
 //! WAV files rendered from REAPER with markers or markers + regions included.
@@ -9,10 +11,10 @@
 //! but many of them do not support embedding markers or loop regions in exported WAV files.
 //! If you find another DAW whose exports this library can read, please let me know.
 //!
-//! ## Key Features
+//! ## Features
 //! - Parses REAPER region markers and cues from WAV files
+//! - Extracts region names, start/end sample offsets, and start/end times and durations (in seconds)
 //! - Supports both markers (single points) and regions (start/end ranges)
-//! - Handles sample loops and label associations
 //! - Provides human-readable and machine-readable output formats
 //!
 //! ## Supported WAV Chunks
@@ -22,7 +24,7 @@
 //! - `LIST` - List chunks containing additional metadata
 //!
 //! ## Example
-//! ```no_run
+//! ```rust,no_run
 //! use reaper_regions::parse_markers_from_file;
 //!
 //! let data = parse_markers_from_file("path/to/audio.wav").unwrap();
@@ -30,7 +32,7 @@
 //! ```
 //!
 //! **Output:**
-//! ```
+//! ```rust,no_run
 //! WavData {
 //!     path: "tests/fixtures/3-markers-3-regions-overlapping_stripped.wav",
 //!     sample_rate: 48000,
@@ -85,7 +87,7 @@
 //! ```
 //!
 //! ## Installation
-//! ```
+//! ```bash
 //! cargo add reaper-regions --no-default-features
 //! ```
 //!

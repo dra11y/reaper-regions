@@ -1,3 +1,5 @@
+This crate includes both a [library](#reaper-regions-library) and a [CLI](#reaper-regions-cli). The CLI dependencies can be excluded with `default-features = false`.
+
 ## REAPER Regions Library
 
 This library parses [REAPER DAW](https://www.reaper.fm/) region markers from WAV files.

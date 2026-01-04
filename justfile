@@ -5,7 +5,9 @@
 # Re-generate README file
 readme:
     @which cargo-readme || cargo binstall -y cargo-readme
-    cargo readme --no-title > README.md
+    echo 'This crate includes both a [library](#reaper-regions-library) and a [CLI](#reaper-regions-cli). The CLI dependencies can be excluded with `default-features = false`.' > README.md
+    echo >> README.md
+    cargo readme --no-title >> README.md
     echo >> README.md
     echo '---' >> README.md
     echo >> README.md

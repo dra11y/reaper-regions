@@ -9,7 +9,7 @@
 //! 1. The project **must** have at least one marker or region defined in the track view:
 //! <img alt="Track showing a marker and two regions" src="images/track.png" width="511">
 //!
-//! 2. 2. The WAV file **must** be rendered with Regions or Regions + Markers, and there must be at least one marker or region in the time range of the rendered output:
+//! 2. The WAV file **must** be rendered with Regions or Regions + Markers, and there must be at least one marker or region in the time range of the rendered output:
 //! <img alt="Render with markers or markers + regions" src="images/render.png" width="610">
 //!
 //! This library **might** work with WAV files exported from other DAWs with markers/regions,

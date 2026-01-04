@@ -1,6 +1,8 @@
 [package]
 name = "reaper-regions"
 version = "0.1.0"
+authors = ["Tom Grushka <tom@dra11y.com>"]
+license = "MIT"
 description = "Read REAPER markers and regions from WAV files"
 edition = "2024"
 
